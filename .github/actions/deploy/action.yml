@@ -88,7 +88,7 @@ runs:
           --memory=1G
           --task-timeout=1h
           --service-account=cloud-run-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
-        env-vars: ${{ inputs.env_vars }}
+        env_vars: ${{ inputs.env_vars }}
 
     - name: 🕰️ Create Main Cloud Scheduler
       shell: bash
