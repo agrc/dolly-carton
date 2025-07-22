@@ -1,0 +1,7 @@
+ignore = ["E501"]
+[tool.pytest.ini_options]
+minversion = "6.0"
+testpaths = ["tests"]
+norecursedirs = [".env", "data", "maps", ".github", ".vscode"]
+console_output_style = "count"
+addopts = "--cov-branch --cov=dolly-carton --cov-report term --cov-report xml:cov.xml --instafail"

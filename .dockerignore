@@ -1,0 +1,13 @@
+Dockerfile
+.eggs
+.env
+.pytest_cache
+.vscode
+tests
+.coverage
+.coveragerc
+.editorconfig
+.gitignore
+LICENSE
+pylintrc
+README.md

@@ -1,0 +1,29 @@
+{
+  "cSpell.words": [
+    "accesstoken",
+    "Buildx",
+    "charliermarsh",
+    "cloudrun",
+    "deqmap",
+    "firestore",
+    "fromitem",
+    "GDAL",
+    "MSSQLSPATIAL",
+    "noninteractive",
+    "osgeo",
+    "palletjack",
+    "PYTHONUNBUFFERED",
+    "rptyr",
+    "ryanluker"
+  ],
+  "editor.formatOnSave": true,
+  "python.languageServer": "Pylance",
+  "python.testing.pytestEnabled": true,
+  "python.testing.pytestArgs": ["--no-cov"],
+  "editor.codeActionsOnSave": {
+    "source.organizeImports": "explicit"
+  },
+  "[python]": {
+    "editor.defaultFormatter": "charliermarsh.ruff"
+  }
+}

@@ -1,0 +1,120 @@
+name: Deploy
+description: Deploy to GCP
+inputs:
+  project_id:
+    description: "The GCP project ID"
+    required: true
+  identity_provider:
+    description: "The identity provider for the workload identity"
+    required: true
+  service_account_email:
+    description: "The service account email"
+    required: true
+  pause_schedule_job:
+    description: "Pause the scheduler job"
+    required: false
+    default: "no"
+  github_token:
+    description: "The GitHub token"
+    required: true
+  env_vars:
+    description: "Environment variables to set in the job"
+    required: false
+
+runs:
+  using: composite
+  steps:
+    - name: Set globals
+      id: globals
+      shell: bash
+      run: |
+        echo "TOPIC_NAME=dolly-topic" >> "${GITHUB_OUTPUT}"
+        echo "CRON=0 2 * * *" >> "${GITHUB_OUTPUT}"
+        echo "JOB_NAME=nightly" >> "${GITHUB_OUTPUT}"
+        echo "JOB_DESCRIPTION=Trigger dolly carton every evening at 8 PM MDT" >> "${GITHUB_OUTPUT}"
+
+    - name: 🗝️ Authenticate to Google Cloud
+      id: auth
+      uses: google-github-actions/auth@v2
+      with:
+        token_format: access_token
+        workload_identity_provider: ${{ inputs.identity_provider }}
+        service_account: ${{ inputs.service_account_email }}
+
+    - name: 🐳 Set up Docker Buildx
+      id: builder
+      uses: docker/setup-buildx-action@v3
+
+    - name: 🗝️ Authenticate Docker to Google Cloud
+      uses: docker/login-action@v3
+      with:
+        registry: us-central1-docker.pkg.dev
+        username: oauth2accesstoken
+        password: ${{ steps.auth.outputs.access_token }}
+
+    - name: 🏷️ Extract tags from GitHub
+      id: meta
+      uses: docker/metadata-action@v5
+      with:
+        github-token: ${{ inputs.github_token }}
+        images: us-central1-docker.pkg.dev/${{ inputs.project_id }}/images/job
+        tags: |
+          type=ref,suffix=-{{sha}},event=branch
+          type=ref,prefix=pr-,suffix=-{{sha}},event=pr
+          type=semver,pattern={{version}}
+          latest
+
+    - name: 📦 Build and push image
+      uses: docker/build-push-action@v6
+      with:
+        builder: ${{ steps.builder.outputs.name }}
+        tags: ${{ steps.meta.outputs.tags }}
+        context: .
+        file: ./Dockerfile
+        push: true
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
+        provenance: false
+
+    - name: 🚀 Deploy Main Cloud Run Job
+      id: deploy
+      uses: google-github-actions/deploy-cloudrun@v2
+      with:
+        job: ${{ steps.globals.outputs.JOB_NAME }}
+        image: us-central1-docker.pkg.dev/${{ inputs.project_id }}/images/job:latest
+        secrets: |
+          /secrets/app/secrets.json=secrets:latest
+        flags: |
+          --memory=1G
+          --task-timeout=1h
+          --service-account=cloud-run-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
+        env-vars: ${{ inputs.env_vars }}
+
+    - name: 🕰️ Create Main Cloud Scheduler
+      shell: bash
+      run: |
+        if [ ! "$(gcloud scheduler jobs list --location=us-central1 | grep ${{ steps.globals.outputs.JOB_NAME }})" ]; then
+          gcloud scheduler jobs create http "${{ steps.globals.outputs.JOB_NAME }}" \
+            --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
+            --schedule="${{ steps.globals.outputs.CRON }}" \
+            --time-zone=America/Denver \
+            --location=us-central1 \
+            --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
+            --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
+            --quiet
+        else
+          gcloud scheduler jobs update http "${{ steps.globals.outputs.JOB_NAME }}" \
+            --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
+            --schedule="${{ steps.globals.outputs.CRON }}" \
+            --time-zone=America/Denver \
+            --location=us-central1 \
+            --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
+            --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
+            --quiet
+        fi
+
+    - name: 🙅 Pause Scheduler Job
+      shell: bash
+      if: inputs.pause_schedule_job != 'no'
+      run: |
+        gcloud scheduler jobs pause "${{ steps.globals.outputs.JOB_NAME }}" --location=us-central1 --quiet
