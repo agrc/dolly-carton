@@ -1,0 +1,26 @@
+{
+  "build": {
+    "context": "..",
+    "dockerfile": "../Dockerfile",
+    "target": "dev_container"
+  },
+  "mounts": [
+    "source=${localWorkspaceFolder}/output,target=${containerWorkspaceFolder}/output,type=bind,consistency=cached"
+  ],
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "charliermarsh.ruff",
+        "editorconfig.editorconfig",
+        "ms-azuretools.vscode-docker",
+        "ms-python.python",
+        "streetsidesoftware.code-spell-checker",
+        "ryanluker.vscode-coverage-gutters"
+      ],
+      "python": {
+        "defaultInterpreterPath": "/usr/local/bin/python"
+      }
+    }
+  },
+  "postCreateCommand": "pip install -e .[tests] --break-system-packages"
+}

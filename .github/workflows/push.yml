@@ -1,0 +1,58 @@
+name: Push Events
+
+on:
+  push:
+    branches:
+      - main
+      - dev
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  release-please:
+    name: Create release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+
+    steps:
+      - name: 🚀 Create Release
+        id: release-please
+        uses: agrc/release-composite-action@v1
+        with:
+          release-type: python
+          prerelease: ${{ github.ref_name == 'dev' }}
+          repo-token: ${{ secrets.GITHUB_TOKEN }}
+          github-app-id: ${{ secrets.UGRC_RELEASE_BOT_APP_ID }}
+          github-app-key: ${{ secrets.UGRC_RELEASE_BOT_APP_KEY }}
+          github-app-name: ${{ secrets.UGRC_RELEASE_BOT_NAME }}
+          github-app-email: ${{ secrets.UGRC_RELEASE_BOT_EMAIL }}
+
+  deploy-dev:
+    name: Deploy Dev
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'dev'
+    environment:
+      name: dev
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: ⬇️ Set up code
+        uses: actions/checkout@v4
+
+      - name: 🚀 Deploy
+        uses: ./.github/actions/deploy
+        timeout-minutes: 15
+        with:
+          project_id: ${{ secrets.PROJECT_ID }}
+          identity_provider: ${{ secrets.IDENTITY_PROVIDER }}
+          service_account_email: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
+          pause_schedule_job: "yes"
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          env_vars: |-
+            APP_ENVIRONMENT=dev
