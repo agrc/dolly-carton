@@ -8,6 +8,4 @@ tests
 .coveragerc
 .editorconfig
 .gitignore
-LICENSE
 pylintrc
-README.md

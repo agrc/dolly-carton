@@ -9,6 +9,9 @@ module_logger = logging.getLogger(__name__)
 RETRY_MAX_TRIES = 3
 RETRY_DELAY_TIME = 2
 
+OUTPUT_PATH = Path("output")
+FGDB_PATH = OUTPUT_PATH / "upload.gdb"
+
 
 #: copied from palletjack
 def retry(worker_method, *args, **kwargs):
@@ -101,3 +104,18 @@ def is_running_on_cloud_run():
     import os
 
     return os.getenv("K_SERVICE") is not None
+
+
+def get_fgdb_name(table: str) -> str:
+    """
+    Get the FGDB name for a given table.
+    """
+    # Remove the 'sgid.' prefix and replace '.' with '_'
+    """
+    TODO - this determines the name of the feature service when publishing for the first time
+    It does not match our existing convention. It outputs something like this: society_cemeteries,
+    whereas our current convention is to use the table name as is, like "Cemeteries".
+
+    TODO - branch on dev env and add a suffix
+    """
+    return table[5:].replace(".", "_").lower()

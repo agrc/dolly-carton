@@ -41,4 +41,4 @@ COPY . /app
 
 WORKDIR /app
 
-RUN pip install .
+RUN pip install . --break-system-packages
