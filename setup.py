@@ -36,7 +36,6 @@ setup(
     keywords=["gis"],
     install_requires=[
         "arcgis==2.*",
-        "google-cloud-logging==3.*",
         "pyodbc==5.*",
     ],
     extras_require={
