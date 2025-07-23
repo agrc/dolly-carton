@@ -7,7 +7,7 @@ from typing import cast
 import pyodbc
 from osgeo import gdal
 
-from dolly.utils import FGDB_PATH, OUTPUT_PATH, get_fgdb_name, get_secrets
+from dolly.utils import FGDB_PATH, OUTPUT_PATH, get_fgdb_name, get_secrets, is_guid
 
 logger = logging.getLogger(__name__)
 
@@ -96,6 +96,10 @@ def get_agol_items_lookup() -> dict[str, dict]:
 
     lookup = {}
     for row in rows:
+        # ignore row if AGOL_ITEM_ID has a value but it's not a valid GUID
+        # these are datasets that are hosted by another agency and not published by us
+        if row[1] is not None and not is_guid(row[1]):
+            continue
         lookup[row[0].lower()] = {
             "item_id": row[1],
             "geometry_type": row[2],

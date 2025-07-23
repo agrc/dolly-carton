@@ -8,7 +8,7 @@ from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
 from arcgis.gis import GIS, Item
 
 from dolly.internal import create_fgdb, update_agol_item
-from dolly.utils import get_fgdb_name, get_secrets, is_guid, retry
+from dolly.utils import get_fgdb_name, get_secrets, retry
 
 logger = logging.getLogger(__name__)
 
@@ -93,58 +93,49 @@ def update_feature_services(
     has_errors = False
     for table in tables:
         item_id = agol_items_lookup.get(table, {}).get("item_id")
-        if item_id is not None and not is_guid(item_id):
-            logger.warning(
-                f"Skipping table {table} as it does not have a valid AGOL item ID."
-            )
+        item = retry(gis.content.get, item_id)
+        if item is None:
+            logger.error(f"Item with ID {item_id} not found in AGOL.")
+            has_errors = True
             continue
-        else:
-            item = retry(gis.content.get, item_id)
-            if item is None:
-                logger.error(f"Item with ID {item_id} not found in AGOL.")
-                has_errors = True
-                continue
 
-            try:
-                if (
-                    agol_items_lookup.get(table, {}).get("geometry_type")
-                    == "STAND ALONE"
-                ):
-                    # table
-                    service_item = Table.fromitem(item, table_id=0)
-                else:
-                    # feature service
-                    service_item = FeatureLayer.fromitem(item, layer_id=0)
+        try:
+            if agol_items_lookup.get(table, {}).get("geometry_type") == "STAND ALONE":
+                # table
+                service_item = Table.fromitem(item, table_id=0)
+            else:
+                # feature service
+                service_item = FeatureLayer.fromitem(item, layer_id=0)
 
-                logger.info(f"Updating feature service for {table} with new FGDB data.")
-                logger.info("truncating...")
-                truncate_result = retry(
-                    service_item.manager.truncate,
-                    asynchronous=True,
-                    wait=True,
+            logger.info(f"Updating feature service for {table} with new FGDB data.")
+            logger.info("truncating...")
+            truncate_result = retry(
+                service_item.manager.truncate,
+                asynchronous=True,
+                wait=True,
+            )
+
+            if truncate_result["status"] != "Completed":
+                raise RuntimeError(
+                    f"Failed to truncate existing data in itemid {service_item.itemid}"
                 )
 
-                if truncate_result["status"] != "Completed":
-                    raise RuntimeError(
-                        f"Failed to truncate existing data in itemid {service_item.itemid}"
-                    )
-
-                logger.info("appending...")
-                result, messages = retry(
-                    service_item.append,
-                    item_id=gdb_item.id,
-                    upload_format="filegdb",
-                    source_table_name=get_fgdb_name(table),
-                    return_messages=True,
-                    rollback=True,
-                )
-                if not result:
-                    logger.error("Append failed but did not error")
-                    has_errors = True
-            except Exception as e:
-                logger.error(f"Failed to update feature service for {table}: {e}")
+            logger.info("appending...")
+            result, messages = retry(
+                service_item.append,
+                item_id=gdb_item.id,
+                upload_format="filegdb",
+                source_table_name=get_fgdb_name(table),
+                return_messages=True,
+                rollback=True,
+            )
+            if not result:
+                logger.error("Append failed but did not error")
                 has_errors = True
-                continue
+        except Exception as e:
+            logger.error(f"Failed to update feature service for {table}: {e}")
+            has_errors = True
+            continue
 
     if not has_errors:
         logger.info("deleting temporary FGDB item")
