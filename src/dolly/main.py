@@ -9,7 +9,6 @@ from dolly.agol import (
     zip_and_upload_fgdb,
 )
 from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
-from dolly.log import setup_logging
 from dolly.utils import OUTPUT_PATH
 
 logger = logging.getLogger(__name__)
@@ -51,7 +50,6 @@ def clean_up() -> None:
 
 
 def main() -> None:
-    setup_logging()
     clean_up()
 
     last_checked = get_last_checked()

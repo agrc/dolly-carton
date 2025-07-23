@@ -99,13 +99,6 @@ def is_guid(value: str) -> bool:
         return False
 
 
-def is_running_on_cloud_run():
-    """Check if the process is running in Google Cloud Run"""
-    import os
-
-    return os.getenv("K_SERVICE") is not None
-
-
 def get_fgdb_name(table: str) -> str:
     """
     Get the FGDB name for a given table.
