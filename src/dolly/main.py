@@ -67,16 +67,13 @@ def main() -> None:
     agol_items_lookup = get_agol_items_lookup()
 
     #: separate out items that do not have a valid AGOL item ID
-    updated_tables_with_existing_services = [
-        table
-        for table in updated_tables
-        if agol_items_lookup.get(table, {}).get("item_id") is not None
-    ]
-    updated_tables_without_existing_services = [
-        table
-        for table in updated_tables
-        if agol_items_lookup.get(table, {}).get("item_id") is None
-    ]
+    updated_tables_with_existing_services = []
+    updated_tables_without_existing_services = []
+    for table in updated_tables:
+        if agol_items_lookup.get(table, {}).get("item_id") is not None:
+            updated_tables_with_existing_services.append(table)
+        else:
+            updated_tables_without_existing_services.append(table)
 
     if len(updated_tables_with_existing_services) > 0:
         logger.info(
