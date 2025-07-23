@@ -89,17 +89,18 @@ runs:
           --task-timeout=1h
           --service-account=cloud-run-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
         env_vars: ${{ inputs.env_vars }}
+        region: us-west3
 
     - name: 🕰️ Create Main Cloud Scheduler
       shell: bash
       run: |
-        if [ ! "$(gcloud scheduler jobs list --location=us-central1 | grep ${{ steps.globals.outputs.JOB_NAME }})" ]; then
+        if [ ! "$(gcloud scheduler jobs list --location=us-west3 | grep ${{ steps.globals.outputs.JOB_NAME }})" ]; then
           gcloud scheduler jobs create http "${{ steps.globals.outputs.JOB_NAME }}" \
             --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
             --schedule="${{ steps.globals.outputs.CRON }}" \
             --time-zone=America/Denver \
-            --location=us-central1 \
-            --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
+            --location=us-west3 \
+            --uri="https://us-west3-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
             --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
             --quiet
         else
@@ -107,8 +108,8 @@ runs:
             --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
             --schedule="${{ steps.globals.outputs.CRON }}" \
             --time-zone=America/Denver \
-            --location=us-central1 \
-            --uri="https://us-central1-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
+            --location=us-west3 \
+            --uri="https://us-west3-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
             --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
             --quiet
         fi
@@ -117,4 +118,4 @@ runs:
       shell: bash
       if: inputs.pause_schedule_job != 'no'
       run: |
-        gcloud scheduler jobs pause "${{ steps.globals.outputs.JOB_NAME }}" --location=us-central1 --quiet
+        gcloud scheduler jobs pause "${{ steps.globals.outputs.JOB_NAME }}" --location=us-west3 --quiet
