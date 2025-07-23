@@ -90,6 +90,7 @@ def update_feature_services(
     """
     #: TODO handle missing agol item lookup entry
 
+    has_errors = False
     for table in tables:
         item_id = agol_items_lookup.get(table, {}).get("item_id")
         if item_id is not None and not is_guid(item_id):
@@ -100,42 +101,54 @@ def update_feature_services(
         else:
             item = retry(gis.content.get, item_id)
             if item is None:
-                raise Exception(f"Item with ID {item_id} not found in AGOL.")
+                logger.error(f"Item with ID {item_id} not found in AGOL.")
+                has_errors = True
+                continue
 
-            if agol_items_lookup.get(table, {}).get("geometry_type") == "STAND ALONE":
-                # table
-                service_item = Table.fromitem(item, table_id=0)
-            else:
-                # feature service
-                service_item = FeatureLayer.fromitem(item, layer_id=0)
+            try:
+                if (
+                    agol_items_lookup.get(table, {}).get("geometry_type")
+                    == "STAND ALONE"
+                ):
+                    # table
+                    service_item = Table.fromitem(item, table_id=0)
+                else:
+                    # feature service
+                    service_item = FeatureLayer.fromitem(item, layer_id=0)
 
-            logger.info(f"Updating feature service for {table} with new FGDB data.")
-            logger.info("truncating...")
-            truncate_result = retry(
-                service_item.manager.truncate,
-                asynchronous=True,
-                wait=True,
-            )
-
-            if truncate_result["status"] != "Completed":
-                raise RuntimeError(
-                    f"Failed to truncate existing data in itemid {service_item.itemid}"
+                logger.info(f"Updating feature service for {table} with new FGDB data.")
+                logger.info("truncating...")
+                truncate_result = retry(
+                    service_item.manager.truncate,
+                    asynchronous=True,
+                    wait=True,
                 )
 
-            logger.info("appending...")
-            result, messages = retry(
-                service_item.append,
-                item_id=gdb_item.id,
-                upload_format="filegdb",
-                source_table_name=get_fgdb_name(table),
-                return_messages=True,
-                rollback=True,
-            )
-            if not result:
-                raise RuntimeError("Append failed but did not error")
+                if truncate_result["status"] != "Completed":
+                    raise RuntimeError(
+                        f"Failed to truncate existing data in itemid {service_item.itemid}"
+                    )
 
-    logger.info("deleting temporary FGDB item")
-    retry(gdb_item.delete, permanent=True)
+                logger.info("appending...")
+                result, messages = retry(
+                    service_item.append,
+                    item_id=gdb_item.id,
+                    upload_format="filegdb",
+                    source_table_name=get_fgdb_name(table),
+                    return_messages=True,
+                    rollback=True,
+                )
+                if not result:
+                    logger.error("Append failed but did not error")
+                    has_errors = True
+            except Exception as e:
+                logger.error(f"Failed to update feature service for {table}: {e}")
+                has_errors = True
+                continue
+
+    if not has_errors:
+        logger.info("deleting temporary FGDB item")
+        retry(gdb_item.delete, permanent=True)
 
 
 def publish_new_feature_services(
@@ -144,50 +157,65 @@ def publish_new_feature_services(
     """
     Publish new feature services for the provided tables.
     """
+
     for table in tables:
         logger.info(f"Publishing new feature service for table {table}")
-        #: when publishing we need one FGDB per table
-        fgdb_path = create_fgdb(
-            [table], agol_items_lookup, table_name=table.split(".")[-1]
-        )
-        single_item = zip_and_upload_fgdb(fgdb_path)
+        try:
+            #: when publishing we need one FGDB per table
+            fgdb_path = create_fgdb(
+                [table], agol_items_lookup, table_name=table.split(".")[-1]
+            )
+            single_item = zip_and_upload_fgdb(fgdb_path)
+        except Exception as e:
+            logger.error(f"Failed to create FGDB for table {table}: {e}")
+            continue
 
-        item = cast(
-            Item,
+        try:
+            item = cast(
+                Item,
+                retry(
+                    single_item.publish,
+                    publish_parameters={
+                        #: use open sgid naming convention for the feature service (with category prefix) and layer/table
+                        "name": get_fgdb_name(table),
+                    },
+                    file_type="fileGeodatabase",
+                ),
+            )
+        except Exception as e:
+            logger.error(f"Failed to publish feature service for table {table}: {e}")
+            continue
+
+        try:
+            category = table.split(".")[1].title()
+            tags = f"UGRC,SGID,{category}"
+            title = agol_items_lookup.get(table, {}).get("published_name", item.title)
+
+            if APP_ENVIRONMENT == "dev":
+                tags += ",Test"
+                title += " (Test)"
+
             retry(
-                single_item.publish,
-                publish_parameters={
-                    "name": get_fgdb_name(table),
+                item.update,
+                {
+                    "title": title,
+                    "description": "TBD",
+                    "snippet": "TBD",
+                    "tags": tags,
                 },
-                file_type="fileGeodatabase",
-            ),
-        )
+            )
+            #: enable "Allow others to export to different formats" checkbox
+            manager = FeatureLayerCollection.fromitem(item).manager
+            retry(manager.update_definition, {"capabilities": "Query,Extract"})
+            retry(item.move, category)
 
-        category = table.split(".")[1].title()
-        tags = f"UGRC,SGID,{category}"
-        title = agol_items_lookup.get(table, {}).get("published_name", item.title)
-
-        if APP_ENVIRONMENT == "dev":
-            tags += ",Test"
-            title += " (Test)"
-
-        retry(
-            item.update,
-            {
-                "title": title,
-                "description": "TBD",
-                "snippet": "TBD",
-                "tags": tags,
-            },
-        )
-        #: enable "Allow others to export to different formats" checkbox
-        manager = FeatureLayerCollection.fromitem(item).manager
-        retry(manager.update_definition, {"capabilities": "Query,Extract"})
-        retry(item.move, category)
-
-        if APP_ENVIRONMENT == "prod":
-            item.sharing.sharing_level = "EVERYONE"
-            retry(item.protect)
+            if APP_ENVIRONMENT == "prod":
+                item.sharing.sharing_level = "EVERYONE"
+                retry(item.protect)
+                # TODO: authoritative?
+        except Exception as e:
+            logger.error(f"Failed to update item {item.id} for table {table}: {e}")
+            continue
 
         logger.info(f"Published new feature service for {table} with item ID {item.id}")
 
