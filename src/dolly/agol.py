@@ -8,7 +8,7 @@ from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
 from arcgis.gis import GIS, Item
 
 from dolly.internal import create_fgdb, update_agol_item
-from dolly.utils import get_fgdb_name, get_secrets, retry
+from dolly.utils import get_secrets, get_service_from_title, retry
 
 logger = logging.getLogger(__name__)
 
@@ -125,7 +125,7 @@ def update_feature_services(
                 service_item.append,
                 item_id=gdb_item.id,
                 upload_format="filegdb",
-                source_table_name=get_fgdb_name(table),
+                source_table_name=get_service_from_title(table),
                 return_messages=True,
                 rollback=True,
             )
@@ -168,7 +168,7 @@ def publish_new_feature_services(
                     single_item.publish,
                     publish_parameters={
                         #: use open sgid naming convention for the feature service (with category prefix) and layer/table
-                        "name": get_fgdb_name(table),
+                        "name": get_service_from_title(table),
                     },
                     file_type="fileGeodatabase",
                 ),

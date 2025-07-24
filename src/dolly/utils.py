@@ -99,16 +99,13 @@ def is_guid(value: str) -> bool:
         return False
 
 
-def get_fgdb_name(table: str) -> str:
-    """
-    Get the FGDB name for a given table.
-    """
-    # Remove the 'sgid.' prefix and replace '.' with '_'
-    """
-    TODO - this determines the name of the feature service when publishing for the first time
-    It does not match our existing convention. It outputs something like this: society_cemeteries,
-    whereas our current convention is to use the table name as is, like "Cemeteries".
+def get_service_from_title(title):
+    if title is None:
+        return title
 
-    TODO - branch on dev env and add a suffix
-    """
-    return table[5:].replace(".", "_").lower()
+    new_title = title.lower()
+    new_title = new_title.replace("utah ", "", 1).replace(" ", "_")
+
+    logging.debug("updating %s to %s", title, new_title)
+
+    return new_title

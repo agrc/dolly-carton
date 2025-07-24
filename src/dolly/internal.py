@@ -7,7 +7,13 @@ from typing import cast
 import pyodbc
 from osgeo import gdal
 
-from dolly.utils import FGDB_PATH, OUTPUT_PATH, get_fgdb_name, get_secrets, is_guid
+from dolly.utils import (
+    FGDB_PATH,
+    OUTPUT_PATH,
+    get_secrets,
+    get_service_from_title,
+    is_guid,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -154,7 +160,7 @@ def create_fgdb(
     output_gdb_path = (
         FGDB_PATH
         if len(tables) > 1
-        else OUTPUT_PATH / f"{get_fgdb_name(tables[0])}.gdb"
+        else OUTPUT_PATH / f"{get_service_from_title(tables[0])}.gdb"
     )
 
     tables_copied = False
@@ -183,7 +189,7 @@ def create_fgdb(
                 #: table name controls the name of the layer in the feature service when publishing for the first time
                 options=[
                     "-nln",
-                    table_name if table_name else get_fgdb_name(table),
+                    table_name if table_name else get_service_from_title(table),
                     "-nlt",
                     geometry_option,
                 ],
