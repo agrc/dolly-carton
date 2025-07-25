@@ -1,6 +1,8 @@
 import logging
+import time
 from datetime import datetime, timedelta
 
+import humanize
 from osgeo import gdal
 
 from dolly.agol import (
@@ -11,6 +13,7 @@ from dolly.agol import (
 from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
 from dolly.utils import OUTPUT_PATH
 
+logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
 #: throw exceptions on errors rather than returning None
@@ -50,52 +53,67 @@ def clean_up() -> None:
 
 
 def main() -> None:
-    clean_up()
+    """
+    Main function to run the Dolly Carton process.
+    """
+    start_time = time.time()
+    logger.info("Starting Dolly Carton process...")
 
-    last_checked = get_last_checked()
-    logger.info(f"Last checked: {last_checked}")
+    try:
+        clean_up()
 
-    updated_tables = get_updated_tables(last_checked)
-    logger.info(f"Updated tables: {updated_tables}")
+        last_checked = get_last_checked()
+        logger.info(f"Last checked: {last_checked}")
 
-    if not updated_tables:
-        logger.info("No updated tables found.")
-        return
+        updated_tables = get_updated_tables(last_checked)
+        logger.info(f"Updated tables: {updated_tables}")
 
-    agol_items_lookup = get_agol_items_lookup()
+        if not updated_tables:
+            logger.info("No updated tables found.")
+            return
 
-    #: separate out items that do not have a valid AGOL item ID
-    updated_tables_with_existing_services = []
-    updated_tables_without_existing_services = []
-    for table in updated_tables:
-        if agol_items_lookup.get(table, {}).get("item_id") is not None:
-            updated_tables_with_existing_services.append(table)
+        agol_items_lookup = get_agol_items_lookup()
+
+        #: separate out items that do not have a valid AGOL item ID
+        updated_tables_with_existing_services = []
+        updated_tables_without_existing_services = []
+        for table in updated_tables:
+            if agol_items_lookup.get(table, {}).get("item_id") is not None:
+                updated_tables_with_existing_services.append(table)
+            else:
+                updated_tables_without_existing_services.append(table)
+
+        if len(updated_tables_with_existing_services) > 0:
+            logger.info(
+                f"Updating existing feature services for tables: {updated_tables_with_existing_services}"
+            )
+
+            fgdb_path = create_fgdb(
+                updated_tables_with_existing_services,
+                agol_items_lookup,
+            )
+            gdb_item = zip_and_upload_fgdb(fgdb_path)
+
+            update_feature_services(
+                gdb_item,
+                updated_tables_with_existing_services,
+                agol_items_lookup,
+            )
         else:
-            updated_tables_without_existing_services.append(table)
+            logger.info("No existing feature services to update.")
 
-    if len(updated_tables_with_existing_services) > 0:
+        if len(updated_tables_without_existing_services) > 0:
+            publish_new_feature_services(
+                updated_tables_without_existing_services,
+                agol_items_lookup,
+            )
+        else:
+            logger.info("No new feature services to publish.")
+
+    finally:
+        end_time = time.time()
+        duration = end_time - start_time
+        duration_delta = timedelta(seconds=duration)
         logger.info(
-            f"Updating existing feature services for tables: {updated_tables_with_existing_services}"
+            f"Dolly Carton process completed in {humanize.precisedelta(duration_delta)}"
         )
-
-        fgdb_path = create_fgdb(
-            updated_tables_with_existing_services,
-            agol_items_lookup,
-        )
-        gdb_item = zip_and_upload_fgdb(fgdb_path)
-
-        update_feature_services(
-            gdb_item,
-            updated_tables_with_existing_services,
-            agol_items_lookup,
-        )
-    else:
-        logger.info("No existing feature services to update.")
-
-    if len(updated_tables_without_existing_services) > 0:
-        publish_new_feature_services(
-            updated_tables_without_existing_services,
-            agol_items_lookup,
-        )
-    else:
-        logger.info("No new feature services to publish.")
