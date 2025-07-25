@@ -41,12 +41,12 @@ def clean_up() -> None:
             if item.is_dir():
                 for subitem in item.rglob("*"):
                     if subitem.is_file():
-                        #: skip .gitkeep file
-                        if subitem.name == ".gitkeep":
-                            continue
                         subitem.unlink()
                 item.rmdir()
             elif item.is_file():
+                #: skip .gitkeep file
+                if item.name == ".gitkeep":
+                    continue
                 item.unlink()
 
     logger.info("Cleaned up temporary files.")
