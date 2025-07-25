@@ -1,5 +1,6 @@
 import json
 import logging
+import re
 from pathlib import Path
 from time import sleep
 from uuid import UUID
@@ -100,11 +101,26 @@ def is_guid(value: str) -> bool:
 
 
 def get_service_from_title(title):
+    """
+    Convert a title to a standardized service name by removing "Utah" and replacing spaces with underscores.
+    This is copied from cloudb (https://github.com/agrc/open-sgid)
+    """
     if title is None:
         return title
 
+    # Handle edge case where title would result in empty string after processing
+    if title.lower().strip() in ["utah", "utah "]:
+        raise ValueError(f"Title '{title}' would result in empty service name")
+
     new_title = title.lower()
-    new_title = new_title.replace("utah ", "", 1).replace(" ", "_")
+
+    #: only remove "Utah" if it is at the beginning of the title
+    if new_title.startswith("utah "):
+        new_title = new_title.replace("utah ", "", 1)
+
+    # Normalize multiple spaces to single spaces before replacing with underscores
+    new_title = re.sub(r"\s+", " ", new_title).strip()
+    new_title = new_title.replace(" ", "_")
 
     logging.debug("updating %s to %s", title, new_title)
 

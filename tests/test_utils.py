@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from dolly.utils import is_guid
+from dolly.utils import get_service_from_title, is_guid
 
 
 class TestIsGuid:
@@ -104,3 +104,115 @@ class TestIsGuid:
             assert is_guid(special_case) is False, (
                 f"Expected {special_case} to be invalid"
             )
+
+
+class TestGetServiceFromTitle:
+    """Test cases for the get_service_from_title function."""
+
+    def test_remove_utah_prefix(self):
+        """Test that 'Utah ' prefix is removed from titles."""
+        test_cases = [
+            ("Utah Municipalities", "municipalities"),
+            ("Utah State Parks", "state_parks"),
+            ("Utah Counties", "counties"),
+            ("Utah Zip Codes", "zip_codes"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_replace_spaces_with_underscores(self):
+        """Test that spaces are replaced with underscores."""
+        test_cases = [
+            ("City Boundaries", "city_boundaries"),
+            ("School Districts", "school_districts"),
+            ("Fire Stations", "fire_stations"),
+            ("Water Bodies", "water_bodies"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_convert_to_lowercase(self):
+        """Test that titles are converted to lowercase."""
+        test_cases = [
+            ("MUNICIPALITIES", "municipalities"),
+            ("School DISTRICTS", "school_districts"),
+            ("Fire Stations", "fire_stations"),
+            ("WATER Bodies", "water_bodies"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_combined_transformations(self):
+        """Test that all transformations work together."""
+        test_cases = [
+            ("Utah City Boundaries", "city_boundaries"),
+            ("Utah SCHOOL DISTRICTS", "school_districts"),
+            ("Utah Fire Stations", "fire_stations"),
+            ("Utah Water Bodies", "water_bodies"),
+            ("Utah Environmental Health", "environmental_health"),
+            ("Utah DEQ Map Tier 2 Report Year", "deq_map_tier_2_report_year"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_none_input(self):
+        """Test that None input returns None."""
+        assert get_service_from_title(None) is None
+
+    def test_empty_string(self):
+        """Test that empty string returns empty string."""
+        assert get_service_from_title("") == ""
+
+    def test_only_utah_prefix(self):
+        """Test titles that are just 'Utah' or 'Utah '."""
+        test_cases = [
+            ("Utah", ""),
+            ("Utah ", ""),
+            ("utah", ""),
+            ("utah ", ""),
+        ]
+
+        for input_title, expected_output in test_cases:
+            with pytest.raises((ValueError, TypeError)):
+                get_service_from_title(input_title)
+
+    def test_utah_not_at_beginning(self):
+        """Test that 'Utah' in the middle or end is not removed."""
+        test_cases = [
+            ("Southern Utah Counties", "southern_utah_counties"),
+            ("Northern Utah Boundaries", "northern_utah_boundaries"),
+            ("Counties Utah", "counties_utah"),
+            ("City Courts of Utah", "city_courts_of_utah"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_multiple_spaces(self):
+        """Test titles with multiple consecutive spaces."""
+        test_cases = [
+            ("Utah  Multiple   Spaces", "multiple_spaces"),
+            ("City  Boundaries", "city_boundaries"),
+            ("   Leading Spaces", "leading_spaces"),
+            ("Trailing Spaces   ", "trailing_spaces"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
+
+    def test_special_characters(self):
+        """Test titles with special characters and numbers."""
+        test_cases = [
+            ("Utah Census 2020", "census_2020"),
+            ("Utah Fire-Stations", "fire-stations"),
+            ("Utah Water/Sewer", "water/sewer"),
+            ("Utah Schools (K-12)", "schools_(k-12)"),
+            ("Utah ZIP+4 Codes", "zip+4_codes"),
+        ]
+
+        for input_title, expected_output in test_cases:
+            assert get_service_from_title(input_title) == expected_output
