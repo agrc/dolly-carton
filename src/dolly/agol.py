@@ -97,7 +97,7 @@ def update_feature_services(
 
     has_errors = False
     for table in tables:
-        item_id = agol_items_lookup.get(table, {}).get("item_id")
+        item_id = agol_items_lookup[table]["item_id"]
         item = retry(gis.content.get, item_id)
         if item is None:
             logger.error(f"Item with ID {item_id} not found in AGOL.")
@@ -105,7 +105,7 @@ def update_feature_services(
             continue
 
         try:
-            if agol_items_lookup.get(table, {}).get("geometry_type") == "STAND ALONE":
+            if agol_items_lookup[table]["geometry_type"] == "STAND ALONE":
                 # table
                 service_item = Table.fromitem(item, table_id=0)
             else:
@@ -160,6 +160,7 @@ def publish_new_feature_services(
         logger.info(f"Publishing new feature service for table {table}")
         try:
             #: when publishing we need one FGDB per table
+            logger.info("Uploading FGDB")
             fgdb_path = create_fgdb(
                 [table], agol_items_lookup, table_name=table.split(".")[-1]
             )
@@ -169,6 +170,7 @@ def publish_new_feature_services(
             continue
 
         try:
+            logger.info("Publishing feature service")
             item = cast(
                 Item,
                 retry(
@@ -189,7 +191,7 @@ def publish_new_feature_services(
         try:
             category = table.split(".")[1].title()
             tags = f"UGRC,SGID,{category}"
-            title = agol_items_lookup.get(table, {}).get("published_name", item.title)
+            title = agol_items_lookup[table]["published_name"]
 
             if APP_ENVIRONMENT == "dev":
                 tags += ",Test"
