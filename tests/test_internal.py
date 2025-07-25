@@ -534,36 +534,6 @@ class TestPrepareGdalOptions:
     @patch("dolly.internal.get_gdal_layer_name")
     @patch("dolly.internal._get_geometry_option")
     @patch("dolly.internal.get_service_from_title")
-    def test_prepare_options_with_custom_table_name(
-        self, mock_get_service, mock_get_geom_option, mock_get_layer_name
-    ):
-        """Test preparing GDAL options with custom table name."""
-        # Setup mocks
-        mock_get_layer_name.return_value = "test_layer"
-        mock_get_geom_option.return_value = "POINT"
-
-        table = "sgid.test.table1"
-        agol_item_info = {
-            "geometry_type": "POINT",
-            "published_name": "Test Table",
-        }
-        custom_table_name = "custom_name"
-
-        result = _prepare_gdal_options(table, agol_item_info, custom_table_name)
-
-        expected = {
-            "layers": ["test_layer"],
-            "format": "OpenFileGDB",
-            "options": ["-nln", "custom_name", "-nlt", "POINT"],
-            "accessMode": "append",
-        }
-
-        assert result == expected
-        mock_get_service.assert_not_called()  # Should not be called with custom name
-
-    @patch("dolly.internal.get_gdal_layer_name")
-    @patch("dolly.internal._get_geometry_option")
-    @patch("dolly.internal.get_service_from_title")
     def test_prepare_options_with_different_geometry_types(
         self, mock_get_service, mock_get_geom_option, mock_get_layer_name
     ):
@@ -617,7 +587,7 @@ class TestCopyTableToFgdb:
         )
 
         assert result is True
-        mock_prepare_options.assert_called_once_with(table, agol_item_info, None)
+        mock_prepare_options.assert_called_once_with(table, agol_item_info)
         mock_translate.assert_called_once_with(
             destNameOrDestDS=str(output_path),
             srcDS=mock_gdal_connection,
@@ -627,40 +597,6 @@ class TestCopyTableToFgdb:
             accessMode="append",
         )
         mock_logger.info.assert_called()
-
-    @patch("dolly.internal._prepare_gdal_options")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_successful_table_copy_with_custom_name(
-        self, mock_logger, mock_translate, mock_prepare_options
-    ):
-        """Test successful table copy with custom table name."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_prepare_options.return_value = {
-            "layers": ["test_layer"],
-            "format": "OpenFileGDB",
-            "options": ["-nln", "custom_name", "-nlt", "POINT"],
-            "accessMode": "append",
-        }
-        mock_translate.return_value = None
-
-        table = "sgid.test.table1"
-        output_path = Path("/test/output.gdb")
-        agol_item_info = {
-            "geometry_type": "POINT",
-            "published_name": "Test Table",
-        }
-        custom_table_name = "custom_name"
-
-        result = _copy_table_to_fgdb(
-            mock_gdal_connection, table, output_path, agol_item_info, custom_table_name
-        )
-
-        assert result is True
-        mock_prepare_options.assert_called_once_with(
-            table, agol_item_info, custom_table_name
-        )
 
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
