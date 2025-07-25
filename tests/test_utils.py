@@ -4,7 +4,7 @@ from uuid import uuid4
 
 import pytest
 
-from dolly.utils import get_service_from_title, is_guid
+from dolly.utils import get_gdal_layer_name, get_service_from_title, is_guid
 
 
 class TestIsGuid:
@@ -216,3 +216,95 @@ class TestGetServiceFromTitle:
 
         for input_title, expected_output in test_cases:
             assert get_service_from_title(input_title) == expected_output
+
+
+class TestGetGdalLayerName:
+    """Test cases for the get_gdal_layer_name function."""
+
+    def test_standard_table_names(self):
+        """Test standard SGID table name conversions."""
+        test_cases = [
+            ("sgid.transportation.roads", "Transportation.ROADS"),
+            ("sgid.boundaries.municipalities", "Boundaries.MUNICIPALITIES"),
+            ("sgid.society.cemeteries", "Society.CEMETERIES"),
+            ("sgid.environment.deqmap_tier2rptyr", "Environment.DEQMAP_TIER2RPTYR"),
+            ("sgid.cadastre.parcels_utah", "Cadastre.PARCELS_UTAH"),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
+
+    def test_multi_word_schema_names(self):
+        """Test schema names with multiple words."""
+        test_cases = [
+            ("sgid.health_facilities.hospitals", "Health_Facilities.HOSPITALS"),
+            ("sgid.water_quality.monitoring_sites", "Water_Quality.MONITORING_SITES"),
+            ("sgid.natural_resources.wetlands", "Natural_Resources.WETLANDS"),
+            ("sgid.public_safety.fire_stations", "Public_Safety.FIRE_STATIONS"),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
+
+    def test_table_names_with_numbers(self):
+        """Test table names containing numbers."""
+        test_cases = [
+            ("sgid.demographic.census2020_blocks", "Demographic.CENSUS2020_BLOCKS"),
+            ("sgid.planning.zoning_districts_2023", "Planning.ZONING_DISTRICTS_2023"),
+            ("sgid.utilities.telecom_towers_5g", "Utilities.TELECOM_TOWERS_5G"),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
+
+    def test_case_variations(self):
+        """Test different case variations in input."""
+        test_cases = [
+            ("SGID.TRANSPORTATION.ROADS", "Transportation.ROADS"),
+            ("sgid.BOUNDARIES.municipalities", "Boundaries.MUNICIPALITIES"),
+            ("Sgid.Society.Cemeteries", "Society.CEMETERIES"),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
+
+    def test_invalid_table_formats(self):
+        """Test invalid table name formats."""
+        invalid_tables = [
+            "sgid.transportation",  # Missing table name
+            "transportation.roads",  # Missing sgid prefix
+            "sgid.transportation.roads.extra",  # Too many parts
+            "sgid",  # Only prefix
+            "roads",  # Only table name
+            "",  # Empty string
+        ]
+
+        for invalid_table in invalid_tables:
+            with pytest.raises(
+                ValueError, match="must be in format 'sgid.schema.table'"
+            ):
+                get_gdal_layer_name(invalid_table)
+
+    def test_special_characters_in_names(self):
+        """Test table names with special characters."""
+        test_cases = [
+            ("sgid.environment.air_quality_pm2_5", "Environment.AIR_QUALITY_PM2_5"),
+            ("sgid.transportation.roads_i_15", "Transportation.ROADS_I_15"),
+            ("sgid.utilities.gas_wells_co2", "Utilities.GAS_WELLS_CO2"),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
+
+    def test_edge_cases(self):
+        """Test edge cases and boundary conditions."""
+        test_cases = [
+            ("sgid.a.b", "A.B"),  # Single character parts
+            (
+                "sgid.very_long_schema_name.very_long_table_name",
+                "Very_Long_Schema_Name.VERY_LONG_TABLE_NAME",
+            ),
+        ]
+
+        for input_table, expected_output in test_cases:
+            assert get_gdal_layer_name(input_table) == expected_output
