@@ -1,3 +1,4 @@
+import json
 import logging
 import os
 from datetime import datetime
@@ -36,18 +37,15 @@ CONNECTION_STRING = (
 )
 internal_connection = pyodbc.connect(CONNECTION_STRING)
 
+DEV_MOCKS_PATH = Path(__file__).parent / "dev_mocks.json"
+
 
 def get_updated_tables(last_checked: datetime) -> list[str]:
     """
     Get a list of updated feature classes/tables since the last checked time.
     """
     if APP_ENVIRONMENT == "dev":
-        # Return hardcoded test data for development
-        return [
-            "sgid.environment.deqmap_tier2rptyr",
-            "sgid.society.cemeteries",
-            "sgid.boundaries.municipalities",
-        ]
+        return json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))["updated_tables"]
 
     # connect to sql database and query the SGID.META.ChangeDetection table
     query = f"""
@@ -69,24 +67,9 @@ def get_agol_items_lookup() -> dict[str, dict]:
     Get a lookup dictionary between table names and AGOL item IDs.
     """
     if APP_ENVIRONMENT == "dev":
-        # Return hardcoded test data for development
-        return {
-            "sgid.society.cemeteries": {
-                "item_id": None,
-                "geometry_type": "POINT",
-                "published_name": "Utah Cemeteries",
-            },
-            "sgid.boundaries.municipalities": {
-                "item_id": "e682d8db7c4f40cb98b7a55f2fd4d176",
-                "geometry_type": "POLYGON",
-                "published_name": "Utah Municipalities",
-            },
-            "sgid.environment.deqmap_tier2rptyr": {
-                "item_id": "984b6ce3308f4630a9f996694d95ee2a",
-                "geometry_type": "STAND ALONE",
-                "published_name": "Utah DEQ Map Tier 2 Report Year",
-            },
-        }
+        return json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))[
+            "agol_items_lookup"
+        ]
 
     query = """
         SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
