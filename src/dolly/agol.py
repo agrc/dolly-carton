@@ -415,9 +415,7 @@ def _create_and_publish_service(
     try:
         # Create FGDB for this single table
         logger.info("Uploading FGDB")
-        fgdb_path = create_fgdb(
-            [table], agol_items_lookup, table_name=table.split(".")[-1]
-        )
+        fgdb_path = create_fgdb([table], agol_items_lookup)
         single_item = zip_and_upload_fgdb(fgdb_path, gis_connection)
 
         # Publish the FGDB as a feature service

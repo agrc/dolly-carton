@@ -275,16 +275,13 @@ def update_agol_item(
         connection.close()
 
 
-def _prepare_gdal_options(
-    table: str, agol_item_info: dict, custom_table_name: str | None = None
-) -> dict:
+def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
     """
     Prepare GDAL translation options for a table.
 
     Args:
         table: Table name to prepare options for
         agol_item_info: AGOL item information dictionary
-        custom_table_name: Optional custom table name override
 
     Returns:
         Dictionary containing GDAL VectorTranslate parameters
@@ -299,7 +296,7 @@ def _prepare_gdal_options(
         "format": "OpenFileGDB",
         "options": [
             "-nln",
-            custom_table_name if custom_table_name else get_service_from_title(title),
+            get_service_from_title(title),
             "-nlt",
             geometry_option,
         ],
@@ -312,7 +309,6 @@ def _copy_table_to_fgdb(
     table: str,
     output_path: Path,
     agol_item_info: dict,
-    custom_table_name: str | None = None,
 ) -> bool:
     """
     Copy a single table to FGDB using GDAL operations.
@@ -322,7 +318,6 @@ def _copy_table_to_fgdb(
         table: Table name to copy
         output_path: Path to the output FGDB
         agol_item_info: AGOL item information dictionary
-        custom_table_name: Optional custom table name override
 
     Returns:
         True if copy was successful, False otherwise
@@ -330,7 +325,7 @@ def _copy_table_to_fgdb(
     logger.info(f"Copying layer {table} to FGDB.")
 
     try:
-        gdal_options = _prepare_gdal_options(table, agol_item_info, custom_table_name)
+        gdal_options = _prepare_gdal_options(table, agol_item_info)
 
         gdal.VectorTranslate(
             destNameOrDestDS=str(output_path), srcDS=gdal_connection, **gdal_options
@@ -348,7 +343,6 @@ def _copy_table_to_fgdb(
 def create_fgdb(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
-    table_name: None | str = None,
     gdal_connection: gdal.Dataset | None = None,
 ) -> Path:
     """
@@ -357,7 +351,6 @@ def create_fgdb(
     Args:
         tables: List of table names to include in the FGDB
         agol_items_lookup: Lookup dictionary with AGOL item information
-        table_name: Optional custom table name
         gdal_connection: GDAL database connection (optional, will create new if not provided).
                         Primarily used for testing to inject mock connections.
 
@@ -381,7 +374,7 @@ def create_fgdb(
         tables_copied = False
         for table in tables:
             success = _copy_table_to_fgdb(
-                internal, table, output_gdb_path, agol_items_lookup[table], table_name
+                internal, table, output_gdb_path, agol_items_lookup[table]
             )
             if success:
                 tables_copied = True
