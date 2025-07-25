@@ -47,6 +47,7 @@ def _get_database_connection() -> pyodbc.Connection:
     Returns:
         pyodbc.Connection: Database connection object
     """
+
     return pyodbc.connect(CONNECTION_STRING)
 
 
@@ -78,7 +79,9 @@ def _generate_output_path(
     if len(tables) == 1:
         first_title = agol_items_lookup[tables[0]]["published_name"]
         category = tables[0].split(".")[1].lower()
+
         return OUTPUT_PATH / f"{category}_{get_service_from_title(first_title)}.gdb"
+
     return FGDB_PATH
 
 
@@ -112,6 +115,7 @@ def _build_change_detection_query(last_checked: datetime) -> str:
     Returns:
         SQL query string
     """
+
     return f"""
         SELECT table_name FROM SGID.META.ChangeDetection
         WHERE last_modified > '{last_checked.strftime("%Y-%m-%d %H:%M:%S")}'
@@ -125,6 +129,7 @@ def _build_agol_items_query() -> str:
     Returns:
         SQL query string
     """
+
     return """
         SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
         FROM SGID.META.AGOLItems
@@ -332,9 +337,11 @@ def _copy_table_to_fgdb(
         )
 
         logger.info(f"Successfully copied layer {table} to FGDB.")
+
         return True
     except Exception as e:
         logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}")
+
         return False
 
 
