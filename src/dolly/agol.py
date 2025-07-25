@@ -69,12 +69,17 @@ def zip_and_upload_fgdb(fgdb_path: Path) -> Item:
 
     folders = gis.content.folders
     root_folder = folders.get()
+    tags = "Temporary,Dolly-Carton"
+    if APP_ENVIRONMENT == "dev":
+        tags += ",Test"
+        title += " (Test)"
     future = retry(
         root_folder.add,
         item_properties={
             "type": item_type,
             "title": title,
             "snippet": "Temporary upload of SGID data to AGOL",
+            "tags": tags,
         },
         file=str(zip_path),
     )
