@@ -1,10 +1,11 @@
 """Tests for utility functions in dolly.utils module."""
 
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
-from dolly.utils import get_gdal_layer_name, get_service_from_title, is_guid
+from dolly.utils import get_gdal_layer_name, get_service_from_title, is_guid, retry
 
 
 class TestIsGuid:
@@ -308,3 +309,178 @@ class TestGetGdalLayerName:
 
         for input_table, expected_output in test_cases:
             assert get_gdal_layer_name(input_table) == expected_output
+
+
+class TestRetry:
+    """Test cases for the retry function."""
+
+    def test_successful_function_no_retry_needed(self):
+        """Test that a successful function executes once and returns the result."""
+        def successful_function(value):
+            return f"success: {value}"
+        
+        result = retry(successful_function, "test")
+        assert result == "success: test"
+
+    def test_function_with_args_and_kwargs(self):
+        """Test that retry properly passes args and kwargs to the worker function."""
+        def function_with_params(arg1, arg2, keyword_arg=None):
+            return f"{arg1}-{arg2}-{keyword_arg}"
+        
+        result = retry(function_with_params, "first", "second", keyword_arg="third")
+        assert result == "first-second-third"
+
+    def test_function_succeeds_after_failures(self):
+        """Test that retry succeeds when function fails initially but succeeds on retry."""
+        call_count = 0
+        
+        def flaky_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 3:  # Fail first 2 times
+                raise Exception(f"Failure {call_count}")
+            return "success on attempt 3"
+        
+        with patch('dolly.utils.sleep'):  # Mock sleep to speed up test
+            result = retry(flaky_function)
+            assert result == "success on attempt 3"
+            assert call_count == 3
+
+    def test_function_fails_after_max_retries(self):
+        """Test that retry raises the final exception after max retries are exhausted."""
+        call_count = 0
+        
+        def always_failing_function():
+            nonlocal call_count
+            call_count += 1
+            raise Exception(f"Failure {call_count}")
+        
+        with patch('dolly.utils.sleep'):  # Mock sleep to speed up test
+            with pytest.raises(Exception, match="Failure 4"):  # RETRY_MAX_TRIES=3, so 4 total attempts
+                retry(always_failing_function)
+            assert call_count == 4  # Initial try + 3 retries
+
+    def test_retry_respects_custom_max_tries(self):
+        """Test that retry respects custom RETRY_MAX_TRIES setting."""
+        call_count = 0
+        
+        def always_failing_function():
+            nonlocal call_count
+            call_count += 1
+            raise Exception(f"Failure {call_count}")
+        
+        # Patch the module-level constants
+        with patch('dolly.utils.RETRY_MAX_TRIES', 1), \
+             patch('dolly.utils.sleep'):
+            with pytest.raises(Exception, match="Failure 2"):  # 1 retry = 2 total attempts
+                retry(always_failing_function)
+            assert call_count == 2
+
+    def test_retry_delay_calculation(self):
+        """Test that retry uses exponential backoff (delay^tries)."""
+        call_count = 0
+        sleep_times = []
+        
+        def always_failing_function():
+            nonlocal call_count
+            call_count += 1
+            raise Exception(f"Failure {call_count}")
+        
+        def mock_sleep(time):
+            sleep_times.append(time)
+        
+        with patch('dolly.utils.sleep', side_effect=mock_sleep):
+            with pytest.raises(Exception):
+                retry(always_failing_function)
+            
+            # With RETRY_DELAY_TIME=2, should be 2^1=2, 2^2=4, 2^3=8
+            expected_delays = [2, 4, 8]
+            assert sleep_times == expected_delays
+
+    def test_retry_respects_custom_delay_time(self):
+        """Test that retry respects custom RETRY_DELAY_TIME setting."""
+        call_count = 0
+        sleep_times = []
+        
+        def always_failing_function():
+            nonlocal call_count
+            call_count += 1
+            raise Exception(f"Failure {call_count}")
+        
+        def mock_sleep(time):
+            sleep_times.append(time)
+        
+        # Use custom delay time of 3 seconds
+        with patch('dolly.utils.RETRY_DELAY_TIME', 3), \
+             patch('dolly.utils.sleep', side_effect=mock_sleep):
+            with pytest.raises(Exception):
+                retry(always_failing_function)
+            
+            # With RETRY_DELAY_TIME=3, should be 3^1=3, 3^2=9, 3^3=27
+            expected_delays = [3, 9, 27]
+            assert sleep_times == expected_delays
+
+    def test_retry_logs_debug_messages(self):
+        """Test that retry logs debug messages for each retry attempt."""
+        call_count = 0
+        
+        def flaky_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:  # Fail first time only
+                raise Exception("Network error")
+            return "success"
+        
+        with patch('dolly.utils.sleep'), \
+             patch('dolly.utils.module_logger') as mock_logger:
+            result = retry(flaky_function)
+            assert result == "success"
+            
+            # Should have logged one debug message for the retry
+            mock_logger.debug.assert_called_once()
+            args = mock_logger.debug.call_args[0]
+            # The logging call format: ('Exception "%s" thrown on "%s". Retrying after %s seconds...', error, worker_method, wait_time)
+            assert "Network error" in str(args[1])  # error message (Exception object)
+            assert args[2] == flaky_function  # worker_method
+            assert args[3] == 2  # wait_time (2^1)
+
+    def test_retry_preserves_exception_type(self):
+        """Test that retry preserves the original exception type."""
+        def function_with_specific_error():
+            raise ValueError("Specific error message")
+        
+        with patch('dolly.utils.sleep'):
+            with pytest.raises(ValueError, match="Specific error message"):
+                retry(function_with_specific_error)
+
+    def test_retry_with_no_arguments(self):
+        """Test that retry works with functions that take no arguments."""
+        call_count = 0
+        
+        def no_args_function():
+            nonlocal call_count
+            call_count += 1
+            if call_count < 2:
+                raise Exception("Fail once")
+            return 42
+        
+        with patch('dolly.utils.sleep'):
+            result = retry(no_args_function)
+            assert result == 42
+            assert call_count == 2
+
+    def test_retry_with_complex_return_types(self):
+        """Test that retry properly returns complex data types."""
+        def function_returning_dict():
+            return {"key": "value", "number": 123, "list": [1, 2, 3]}
+        
+        result = retry(function_returning_dict)
+        assert result == {"key": "value", "number": 123, "list": [1, 2, 3]}
+
+    def test_retry_with_none_return(self):
+        """Test that retry properly handles functions that return None."""
+        def function_returning_none():
+            return None
+        
+        result = retry(function_returning_none)
+        assert result is None
