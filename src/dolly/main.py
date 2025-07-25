@@ -13,6 +13,7 @@ from dolly.agol import (
     zip_and_upload_fgdb,
 )
 from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
+from dolly.state import get_last_checked, set_last_checked
 from dolly.utils import OUTPUT_PATH, get_secrets
 
 logging.basicConfig(level=logging.INFO)
@@ -21,16 +22,8 @@ logger = logging.getLogger(__name__)
 #: throw exceptions on errors rather than returning None
 gdal.UseExceptions()
 
-
-def get_last_checked() -> datetime:
-    """
-    Get the last time the change detection was checked.
-    This could be stored in a file, database, or any other persistent storage.
-    """
-
-    # return yesterday
-    #: todo - convert this to some sort of state, firestore or cloud storage?
-    return datetime.now() - timedelta(days=1)
+# Get environment setting
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
 
 
 def clean_up() -> None:
@@ -111,6 +104,10 @@ def main() -> None:
             )
         else:
             logger.info("No new feature services to publish.")
+
+        # Update the last checked timestamp after successful processing
+        current_time = datetime.now()
+        set_last_checked(current_time)
 
     finally:
         end_time = time.time()

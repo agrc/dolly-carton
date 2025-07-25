@@ -36,6 +36,7 @@ setup(
     keywords=["gis"],
     install_requires=[
         "arcgis==2.*",
+        "google-cloud-firestore==2.*",
         "humanize==4.*",
         "pyodbc==5.*",
     ],
