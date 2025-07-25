@@ -76,8 +76,7 @@ def get_secrets():
 
     secret_folder = Path("/secrets")
 
-    #: Try to get the secrets from the Cloud Function mount point
-    #: TODO: update for cloud run
+    #: Try to get the secrets from the Cloud Run mount point
     if secret_folder.exists():
         return json.loads(Path("/secrets/app/secrets.json").read_text(encoding="utf-8"))
 
