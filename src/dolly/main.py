@@ -78,7 +78,7 @@ def main() -> None:
         updated_tables_with_existing_services = []
         updated_tables_without_existing_services = []
         for table in updated_tables:
-            if agol_items_lookup.get(table, {}).get("item_id") is not None:
+            if agol_items_lookup[table]["item_id"] is not None:
                 updated_tables_with_existing_services.append(table)
             else:
                 updated_tables_without_existing_services.append(table)
