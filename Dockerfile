@@ -42,3 +42,5 @@ COPY . /app
 WORKDIR /app
 
 RUN pip install . --break-system-packages
+
+CMD ["dolly"]
