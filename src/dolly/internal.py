@@ -11,6 +11,7 @@ from osgeo import gdal
 from dolly.utils import (
     FGDB_PATH,
     OUTPUT_PATH,
+    get_gdal_layer_name,
     get_secrets,
     get_service_from_title,
     is_guid,
@@ -121,16 +122,6 @@ def create_fgdb(
     agol_items_lookup: dict[str, dict],
     table_name: None | str = None,
 ) -> Path:
-    table_name_map = {}
-    non_spatial_table_names = []
-    for table in tables:
-        parts = table.split(".")
-        db_table_name = f"{parts[1].title()}.{parts[2].upper()}"
-        table_name_map[table] = db_table_name
-
-        if agol_items_lookup.get(table, {}).get("geometry_type") == "STAND ALONE":
-            non_spatial_table_names.append(db_table_name)
-
     #: I could not get this to work with the open_options parameter
     with gdal.config_options({"MSSQLSPATIAL_LIST_ALL_TABLES": "YES"}):
         internal = gdal.OpenEx(f"MSSQL:{CONNECTION_STRING}", gdal.OF_VECTOR)
@@ -140,19 +131,21 @@ def create_fgdb(
     if len(tables) == 0:
         raise ValueError("No tables provided to create FGDB.")
 
-    output_gdb_path = (
-        FGDB_PATH
-        if len(tables) > 1
-        else OUTPUT_PATH / f"{get_service_from_title(tables[0])}.gdb"
-    )
+        # Get the first table's published name for the FGDB name
+    first_title = agol_items_lookup[tables[0]]["published_name"]
+    output_gdb_path = FGDB_PATH
+    if len(tables) == 1:
+        category = tables[0].split(".")[1].lower()
+        output_gdb_path = (
+            OUTPUT_PATH / f"{category}_{get_service_from_title(first_title)}.gdb"
+        )
 
     tables_copied = False
     for table in tables:
         logger.info(f"Copying layer {table} to FGDB.")
 
-        layer_to_copy = table_name_map.get(table)
-
-        geometry_type = agol_items_lookup.get(table, {}).get("geometry_type")
+        layer_name = get_gdal_layer_name(table)
+        geometry_type = agol_items_lookup[table]["geometry_type"]
         geometry_option = None
         if geometry_type == "POLYGON":
             geometry_option = "MULTIPOLYGON"
@@ -163,16 +156,18 @@ def create_fgdb(
         else:
             geometry_option = geometry_type
 
+        title = agol_items_lookup[table]["published_name"]
+
         try:
             gdal.VectorTranslate(
                 destNameOrDestDS=str(output_gdb_path),
                 srcDS=internal,
                 format="OpenFileGDB",
-                layers=[layer_to_copy],
+                layers=[layer_name],
                 #: table name controls the name of the layer in the feature service when publishing for the first time
                 options=[
                     "-nln",
-                    table_name if table_name else get_service_from_title(table),
+                    table_name if table_name else get_service_from_title(title),
                     "-nlt",
                     geometry_option,
                 ],

@@ -125,3 +125,26 @@ def get_service_from_title(title):
     logging.debug("updating %s to %s", title, new_title)
 
     return new_title
+
+
+def get_gdal_layer_name(table: str) -> str:
+    """
+    Convert a table name to GDAL layer name format.
+
+    Args:
+        table: Table name in format "sgid.schema.table"
+
+    Returns:
+        GDAL layer name in format "Schema.TABLE"
+
+    Example:
+        "sgid.transportation.roads" -> "Transportation.ROADS"
+    """
+    parts = table.split(".")
+    if len(parts) != 3:
+        raise ValueError(f"Table name '{table}' must be in format 'sgid.schema.table'")
+
+    schema = parts[1].title()  # Capitalize first letter of each word
+    table_name = parts[2].upper()  # Convert to uppercase
+
+    return f"{schema}.{table_name}"
