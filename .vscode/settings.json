@@ -3,6 +3,7 @@
     "accesstoken",
     "Buildx",
     "charliermarsh",
+    "cloudb",
     "cloudrun",
     "deqmap",
     "firestore",
@@ -12,9 +13,11 @@
     "noninteractive",
     "osgeo",
     "palletjack",
+    "precisedelta",
     "PYTHONUNBUFFERED",
     "rptyr",
-    "ryanluker"
+    "ryanluker",
+    "saltlake"
   ],
   "editor.formatOnSave": true,
   "python.languageServer": "Pylance",
