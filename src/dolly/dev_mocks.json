@@ -1,0 +1,35 @@
+{
+  "agol_items_lookup": {
+    "sgid.society.cemeteries": {
+      "item_id": null,
+      "geometry_type": "POINT",
+      "published_name": "Utah Cemeteries"
+    },
+    "sgid.boundaries.municipalities": {
+      "item_id": "e682d8db7c4f40cb98b7a55f2fd4d176",
+      "geometry_type": "POLYGON",
+      "published_name": "Utah Municipalities"
+    },
+    "sgid.environment.deqmap_tier2rptyr": {
+      "item_id": "984b6ce3308f4630a9f996694d95ee2a",
+      "geometry_type": "STAND ALONE",
+      "published_name": "Utah DEQ Map Tier 2 Report Year"
+    },
+    "sgid.transportation.roads": {
+      "item_id": "a4e0b2f3ab364c31955a83ce3d30d3c6",
+      "geometry_type": "POLYLINE",
+      "published_name": "Utah Roads"
+    },
+    "sgid.cadastre.parcels_saltlake": {
+      "item_id": null,
+      "geometry_type": "POLYGON",
+      "published_name": "Utah Salt Lake County Parcels"
+    }
+  },
+  "updated_tables": [
+    "sgid.society.cemeteries",
+    "sgid.boundaries.municipalities",
+    "sgid.environment.deqmap_tier2rptyr",
+    "sgid.transportation.roads"
+  ]
+}
