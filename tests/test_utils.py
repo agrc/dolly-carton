@@ -5,7 +5,13 @@ from uuid import uuid4
 
 import pytest
 
-from dolly.utils import get_gdal_layer_name, get_service_from_title, is_guid, retry
+from dolly.utils import (
+    get_gdal_layer_name,
+    get_secrets,
+    get_service_from_title,
+    is_guid,
+    retry,
+)
 
 
 class TestIsGuid:
@@ -311,37 +317,258 @@ class TestGetGdalLayerName:
             assert get_gdal_layer_name(input_table) == expected_output
 
 
+class TestGetSecrets:
+    """Test cases for the get_secrets function."""
+
+    @patch("dolly.utils.json.loads")
+    @patch("dolly.utils.Path")
+    def test_load_secrets_from_cloud_run_mount(self, mock_path_class, mock_json_loads):
+        """Test loading secrets from Cloud Run mount point at /secrets."""
+        expected_secrets = {"api_key": "test_key", "database_url": "test_url"}
+
+        # Mock the cloud run secrets folder to exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = True
+
+        # Mock the secrets file content
+        mock_secrets_file = mock_path_class.return_value
+        mock_secrets_file.read_text.return_value = '{"api_key": "test_key"}'
+
+        # Mock json.loads to return expected data
+        mock_json_loads.return_value = expected_secrets
+
+        # Set up Path class to return appropriate mocks
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/secrets/app/secrets.json":
+                return mock_secrets_file
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        result = get_secrets()
+
+        assert result == expected_secrets
+        mock_cloud_folder.exists.assert_called_once()
+        mock_secrets_file.read_text.assert_called_once_with(encoding="utf-8")
+        mock_json_loads.assert_called_once_with('{"api_key": "test_key"}')
+
+    @patch("dolly.utils.json.loads")
+    @patch("dolly.utils.Path")
+    def test_load_secrets_from_local_development(
+        self, mock_path_class, mock_json_loads
+    ):
+        """Test loading secrets from local development folder when Cloud Run mount doesn't exist."""
+        expected_secrets = {"local_key": "local_value", "debug": True}
+
+        # Mock the cloud folder to NOT exist, local folder to exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = False
+
+        mock_local_folder = mock_path_class.return_value
+        mock_local_folder.exists.return_value = True
+
+        mock_local_file = mock_path_class.return_value
+        mock_local_file.read_text.return_value = '{"local_key": "local_value"}'
+
+        # Mock json.loads to return expected data
+        mock_json_loads.return_value = expected_secrets
+
+        # Mock the Path(__file__).parent / "secrets" chain
+        mock_file_path = mock_path_class.return_value
+        mock_file_path.parent = mock_path_class.return_value
+        mock_file_path.parent.__truediv__ = (
+            lambda self, other: mock_local_folder
+            if other == "secrets"
+            else mock_path_class.return_value
+        )
+        mock_local_folder.__truediv__ = (
+            lambda self, other: mock_local_file
+            if other == "secrets.json"
+            else mock_path_class.return_value
+        )
+
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/workspaces/dolly-carton/src/dolly/utils.py":
+                return mock_file_path
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        with patch(
+            "dolly.utils.__file__", "/workspaces/dolly-carton/src/dolly/utils.py"
+        ):
+            result = get_secrets()
+
+        assert result == expected_secrets
+        mock_cloud_folder.exists.assert_called_once()
+        mock_local_folder.exists.assert_called_once()
+        mock_local_file.read_text.assert_called_once_with(encoding="utf-8")
+        mock_json_loads.assert_called_once_with('{"local_key": "local_value"}')
+
+    @patch("dolly.utils.Path")
+    def test_secrets_file_not_found_raises_error(self, mock_path_class):
+        """Test that FileNotFoundError is raised when no secrets folder is found."""
+        # Mock both cloud and local folders to not exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = False
+
+        mock_local_folder = mock_path_class.return_value
+        mock_local_folder.exists.return_value = False
+
+        # Mock the Path(__file__).parent / "secrets" chain
+        mock_file_path = mock_path_class.return_value
+        mock_file_path.parent = mock_path_class.return_value
+        mock_file_path.parent.__truediv__ = (
+            lambda self, other: mock_local_folder
+            if other == "secrets"
+            else mock_path_class.return_value
+        )
+
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/workspaces/dolly-carton/src/dolly/utils.py":
+                return mock_file_path
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        with patch(
+            "dolly.utils.__file__", "/workspaces/dolly-carton/src/dolly/utils.py"
+        ):
+            with pytest.raises(
+                FileNotFoundError, match="Secrets folder not found; secrets not loaded."
+            ):
+                get_secrets()
+
+    @patch("dolly.utils.json.loads")
+    @patch("dolly.utils.Path")
+    def test_invalid_json_raises_error(self, mock_path_class, mock_json_loads):
+        """Test handling of invalid JSON in secrets file."""
+        # Mock the cloud folder to exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = True
+
+        mock_secrets_file = mock_path_class.return_value
+        mock_secrets_file.read_text.return_value = '{"invalid": json}'
+
+        # Mock json.loads to raise ValueError for invalid JSON
+        mock_json_loads.side_effect = ValueError("Invalid JSON")
+
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/secrets/app/secrets.json":
+                return mock_secrets_file
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        with pytest.raises(ValueError, match="Invalid JSON"):
+            get_secrets()
+
+    @patch("dolly.utils.json.loads")
+    @patch("dolly.utils.Path")
+    def test_empty_secrets_file(self, mock_path_class, mock_json_loads):
+        """Test handling of empty secrets file."""
+        # Mock the cloud folder to exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = True
+
+        mock_secrets_file = mock_path_class.return_value
+        mock_secrets_file.read_text.return_value = "{}"
+
+        # Mock json.loads to return empty dict
+        mock_json_loads.return_value = {}
+
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/secrets/app/secrets.json":
+                return mock_secrets_file
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        result = get_secrets()
+        assert result == {}
+        mock_json_loads.assert_called_once_with("{}")
+
+    @patch("dolly.utils.json.loads")
+    @patch("dolly.utils.Path")
+    def test_secrets_file_with_nested_structure(self, mock_path_class, mock_json_loads):
+        """Test loading secrets file with nested JSON structure."""
+        expected_secrets = {
+            "database": {
+                "host": "localhost",
+                "port": 5432,
+                "credentials": {"username": "user", "password": "pass"},
+            },
+            "api": {"keys": ["key1", "key2"], "timeout": 30},
+        }
+
+        # Mock the cloud folder to exist
+        mock_cloud_folder = mock_path_class.return_value
+        mock_cloud_folder.exists.return_value = True
+
+        mock_secrets_file = mock_path_class.return_value
+        nested_json_str = '{"database": {"host": "localhost", "port": 5432}}'
+        mock_secrets_file.read_text.return_value = nested_json_str
+
+        # Mock json.loads to return nested structure
+        mock_json_loads.return_value = expected_secrets
+
+        def path_constructor(path_str):
+            if path_str == "/secrets":
+                return mock_cloud_folder
+            elif path_str == "/secrets/app/secrets.json":
+                return mock_secrets_file
+            return mock_path_class.return_value
+
+        mock_path_class.side_effect = path_constructor
+
+        result = get_secrets()
+        assert result == expected_secrets
+        mock_json_loads.assert_called_once_with(nested_json_str)
+
+
 class TestRetry:
     """Test cases for the retry function."""
 
     def test_successful_function_no_retry_needed(self):
         """Test that a successful function executes once and returns the result."""
+
         def successful_function(value):
             return f"success: {value}"
-        
+
         result = retry(successful_function, "test")
         assert result == "success: test"
 
     def test_function_with_args_and_kwargs(self):
         """Test that retry properly passes args and kwargs to the worker function."""
+
         def function_with_params(arg1, arg2, keyword_arg=None):
             return f"{arg1}-{arg2}-{keyword_arg}"
-        
+
         result = retry(function_with_params, "first", "second", keyword_arg="third")
         assert result == "first-second-third"
 
     def test_function_succeeds_after_failures(self):
         """Test that retry succeeds when function fails initially but succeeds on retry."""
         call_count = 0
-        
+
         def flaky_function():
             nonlocal call_count
             call_count += 1
             if call_count < 3:  # Fail first 2 times
                 raise Exception(f"Failure {call_count}")
             return "success on attempt 3"
-        
-        with patch('dolly.utils.sleep'):  # Mock sleep to speed up test
+
+        with patch("dolly.utils.sleep"):  # Mock sleep to speed up test
             result = retry(flaky_function)
             assert result == "success on attempt 3"
             assert call_count == 3
@@ -349,30 +576,33 @@ class TestRetry:
     def test_function_fails_after_max_retries(self):
         """Test that retry raises the final exception after max retries are exhausted."""
         call_count = 0
-        
+
         def always_failing_function():
             nonlocal call_count
             call_count += 1
             raise Exception(f"Failure {call_count}")
-        
-        with patch('dolly.utils.sleep'):  # Mock sleep to speed up test
-            with pytest.raises(Exception, match="Failure 4"):  # RETRY_MAX_TRIES=3, so 4 total attempts
+
+        with patch("dolly.utils.sleep"):  # Mock sleep to speed up test
+            with pytest.raises(
+                Exception, match="Failure 4"
+            ):  # RETRY_MAX_TRIES=3, so 4 total attempts
                 retry(always_failing_function)
             assert call_count == 4  # Initial try + 3 retries
 
     def test_retry_respects_custom_max_tries(self):
         """Test that retry respects custom RETRY_MAX_TRIES setting."""
         call_count = 0
-        
+
         def always_failing_function():
             nonlocal call_count
             call_count += 1
             raise Exception(f"Failure {call_count}")
-        
+
         # Patch the module-level constants
-        with patch('dolly.utils.RETRY_MAX_TRIES', 1), \
-             patch('dolly.utils.sleep'):
-            with pytest.raises(Exception, match="Failure 2"):  # 1 retry = 2 total attempts
+        with patch("dolly.utils.RETRY_MAX_TRIES", 1), patch("dolly.utils.sleep"):
+            with pytest.raises(
+                Exception, match="Failure 2"
+            ):  # 1 retry = 2 total attempts
                 retry(always_failing_function)
             assert call_count == 2
 
@@ -380,19 +610,19 @@ class TestRetry:
         """Test that retry uses exponential backoff (delay^tries)."""
         call_count = 0
         sleep_times = []
-        
+
         def always_failing_function():
             nonlocal call_count
             call_count += 1
             raise Exception(f"Failure {call_count}")
-        
+
         def mock_sleep(time):
             sleep_times.append(time)
-        
-        with patch('dolly.utils.sleep', side_effect=mock_sleep):
+
+        with patch("dolly.utils.sleep", side_effect=mock_sleep):
             with pytest.raises(Exception):
                 retry(always_failing_function)
-            
+
             # With RETRY_DELAY_TIME=2, should be 2^1=2, 2^2=4, 2^3=8
             expected_delays = [2, 4, 8]
             assert sleep_times == expected_delays
@@ -401,21 +631,23 @@ class TestRetry:
         """Test that retry respects custom RETRY_DELAY_TIME setting."""
         call_count = 0
         sleep_times = []
-        
+
         def always_failing_function():
             nonlocal call_count
             call_count += 1
             raise Exception(f"Failure {call_count}")
-        
+
         def mock_sleep(time):
             sleep_times.append(time)
-        
+
         # Use custom delay time of 3 seconds
-        with patch('dolly.utils.RETRY_DELAY_TIME', 3), \
-             patch('dolly.utils.sleep', side_effect=mock_sleep):
+        with (
+            patch("dolly.utils.RETRY_DELAY_TIME", 3),
+            patch("dolly.utils.sleep", side_effect=mock_sleep),
+        ):
             with pytest.raises(Exception):
                 retry(always_failing_function)
-            
+
             # With RETRY_DELAY_TIME=3, should be 3^1=3, 3^2=9, 3^3=27
             expected_delays = [3, 9, 27]
             assert sleep_times == expected_delays
@@ -423,19 +655,21 @@ class TestRetry:
     def test_retry_logs_debug_messages(self):
         """Test that retry logs debug messages for each retry attempt."""
         call_count = 0
-        
+
         def flaky_function():
             nonlocal call_count
             call_count += 1
             if call_count < 2:  # Fail first time only
                 raise Exception("Network error")
             return "success"
-        
-        with patch('dolly.utils.sleep'), \
-             patch('dolly.utils.module_logger') as mock_logger:
+
+        with (
+            patch("dolly.utils.sleep"),
+            patch("dolly.utils.module_logger") as mock_logger,
+        ):
             result = retry(flaky_function)
             assert result == "success"
-            
+
             # Should have logged one debug message for the retry
             mock_logger.debug.assert_called_once()
             args = mock_logger.debug.call_args[0]
@@ -446,41 +680,44 @@ class TestRetry:
 
     def test_retry_preserves_exception_type(self):
         """Test that retry preserves the original exception type."""
+
         def function_with_specific_error():
             raise ValueError("Specific error message")
-        
-        with patch('dolly.utils.sleep'):
+
+        with patch("dolly.utils.sleep"):
             with pytest.raises(ValueError, match="Specific error message"):
                 retry(function_with_specific_error)
 
     def test_retry_with_no_arguments(self):
         """Test that retry works with functions that take no arguments."""
         call_count = 0
-        
+
         def no_args_function():
             nonlocal call_count
             call_count += 1
             if call_count < 2:
                 raise Exception("Fail once")
             return 42
-        
-        with patch('dolly.utils.sleep'):
+
+        with patch("dolly.utils.sleep"):
             result = retry(no_args_function)
             assert result == 42
             assert call_count == 2
 
     def test_retry_with_complex_return_types(self):
         """Test that retry properly returns complex data types."""
+
         def function_returning_dict():
             return {"key": "value", "number": 123, "list": [1, 2, 3]}
-        
+
         result = retry(function_returning_dict)
         assert result == {"key": "value", "number": 123, "list": [1, 2, 3]}
 
     def test_retry_with_none_return(self):
         """Test that retry properly handles functions that return None."""
+
         def function_returning_none():
             return None
-        
+
         result = retry(function_returning_none)
         assert result is None
