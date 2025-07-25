@@ -125,12 +125,14 @@ def update_feature_services(
                     f"Failed to truncate existing data in itemid {service_item.itemid}"
                 )
 
-            logger.info("appending...")
+            title = agol_items_lookup[table]["published_name"]
+            service_name = get_service_from_title(title)
+            logger.info(f"appending: {service_name}")
             result, messages = retry(
                 service_item.append,
                 item_id=gdb_item.id,
                 upload_format="filegdb",
-                source_table_name=get_service_from_title(table),
+                source_table_name=service_name,
                 return_messages=True,
                 rollback=True,
             )
@@ -173,7 +175,9 @@ def publish_new_feature_services(
                     single_item.publish,
                     publish_parameters={
                         #: use open sgid naming convention for the feature service (with category prefix) and layer/table
-                        "name": get_service_from_title(table),
+                        "name": get_service_from_title(
+                            agol_items_lookup[table]["published_name"]
+                        ),
                     },
                     file_type="fileGeodatabase",
                 ),
