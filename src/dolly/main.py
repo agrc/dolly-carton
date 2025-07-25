@@ -1,8 +1,10 @@
 import logging
+import os
 import time
 from datetime import datetime, timedelta
 
 import humanize
+from arcgis.gis import GIS
 from osgeo import gdal
 
 from dolly.agol import (
@@ -11,7 +13,7 @@ from dolly.agol import (
     zip_and_upload_fgdb,
 )
 from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
-from dolly.utils import OUTPUT_PATH
+from dolly.utils import OUTPUT_PATH, get_secrets
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
@@ -116,4 +118,56 @@ def main() -> None:
         duration_delta = timedelta(seconds=duration)
         logger.info(
             f"Dolly Carton process completed in {humanize.precisedelta(duration_delta)}"
+        )
+
+
+def cleanup_dev_agol_items() -> None:
+    """
+    Cleans up feature services that are published during dev runs
+    """
+    start_time = time.time()
+    logger.info("Starting cleanup of dev feature services...")
+
+    try:
+        APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+        if APP_ENVIRONMENT != "dev":
+            raise ValueError("Not in dev environment!")
+
+        secrets = get_secrets()
+        gis = GIS(
+            "https://utah.maps.arcgis.com",
+            username=secrets.get("AGOL_USERNAME"),
+            password=secrets.get("AGOL_PASSWORD"),
+        )
+        agol_items_lookup = get_agol_items_lookup()
+
+        for table in agol_items_lookup:
+            item_id = agol_items_lookup[table]["item_id"]
+            if item_id is not None:
+                continue
+
+            logger.info(f"Cleaning up dev item for table {table} (item_id: {item_id})")
+            title = f"{agol_items_lookup[table]['published_name']} (Test)"
+            search_results = gis.content.search(
+                f'title:"{title}" AND owner:{gis.users.me.username}',
+                max_items=1,
+            )
+            if not search_results:
+                logger.warning(
+                    f"Item with title: {title} not found, skipping deletion."
+                )
+                continue
+            else:
+                item = search_results[0]
+                logger.info(f"Deleting item {item.id} for table {table}")
+                result = item.delete(permanent=True)
+                if not result:
+                    raise RuntimeError(f"Failed to delete item {item_id}")
+
+    finally:
+        end_time = time.time()
+        duration = end_time - start_time
+        duration_delta = timedelta(seconds=duration)
+        logger.info(
+            f"Dev feature services cleanup completed in {humanize.precisedelta(duration_delta)}"
         )

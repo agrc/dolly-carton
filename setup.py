@@ -55,6 +55,7 @@ setup(
     entry_points={
         "console_scripts": [
             "dolly=dolly.main:main",
+            "dolly-cleanup-dev-agol=dolly.main:cleanup_dev_agol_items",
         ]
     },
 )
