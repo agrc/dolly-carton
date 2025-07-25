@@ -213,8 +213,8 @@ def publish_new_feature_services(
 
             if APP_ENVIRONMENT == "prod":
                 item.sharing.sharing_level = "EVERYONE"
+                item.content_status = "public_authoritative"
                 retry(item.protect)
-                # TODO: authoritative?
         except Exception as e:
             logger.error(f"Failed to update item {item.id} for table {table}: {e}")
             continue
