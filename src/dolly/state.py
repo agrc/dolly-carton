@@ -30,6 +30,7 @@ def get_last_checked() -> datetime:
             data = doc.to_dict()
             if data and "last_checked" in data:
                 # Firestore stores timestamps as datetime objects
+
                 return data["last_checked"]
 
         # If document doesn't exist or doesn't have last_checked, raise an exception
@@ -43,6 +44,7 @@ def get_last_checked() -> datetime:
         )
     else:
         # In dev environment, return yesterday
+
         return datetime.now() - timedelta(days=1)
 
 

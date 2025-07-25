@@ -57,6 +57,7 @@ def retry(worker_method, *args, **kwargs):
                 )
                 sleep(wait_time)
                 tries += 1
+
                 return _inner_retry(worker_method, *args, **kwargs)
             else:
                 raise error
@@ -94,6 +95,7 @@ def is_guid(value: str) -> bool:
     """
     try:
         UUID(value)
+
         return True
     except ValueError:
         return False
