@@ -40,7 +40,7 @@ def _generate_upload_tags() -> str:
     Returns:
         Comma-separated tags string
     """
-    tags = "Temporary,Dolly-Carton"
+    tags = "Temp"
     if APP_ENVIRONMENT == "dev":
         tags += ",Test"
 
