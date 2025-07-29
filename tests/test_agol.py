@@ -648,3 +648,586 @@ class TestAppendNewDataToService:
 
         assert result is False
         mock_logger.error.assert_called_once_with("Append failed but did not error")
+
+
+class TestZipAndUploadFgdb:
+    """Test cases for the zip_and_upload_fgdb function."""
+
+    @patch("dolly.agol._upload_item_to_agol")
+    @patch("dolly.agol._delete_agol_item")
+    @patch("dolly.agol._search_existing_item")
+    @patch("dolly.agol._generate_upload_tags")
+    @patch("dolly.agol._generate_upload_title")
+    @patch("dolly.agol._create_zip_from_fgdb")
+    @patch("dolly.agol._get_gis_connection")
+    def test_zip_and_upload_without_existing_item(
+        self,
+        mock_get_gis,
+        mock_create_zip,
+        mock_generate_title,
+        mock_generate_tags,
+        mock_search_existing,
+        mock_delete_item,
+        mock_upload_item,
+    ):
+        """Test zip and upload when no existing item exists."""
+        # Setup mocks
+        fgdb_path = Path("/test/data.gdb")
+        zip_path = Path("/test/data.zip")
+        mock_create_zip.return_value = zip_path
+        mock_generate_title.return_value = "Test Title"
+        mock_generate_tags.return_value = "Test,Tags"
+        mock_search_existing.return_value = []
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+        mock_uploaded_item = Mock()
+        mock_upload_item.return_value = mock_uploaded_item
+
+        from dolly.agol import zip_and_upload_fgdb
+
+        result = zip_and_upload_fgdb(fgdb_path)
+
+        # Verify all functions were called correctly
+        mock_create_zip.assert_called_once_with(fgdb_path)
+        mock_generate_title.assert_called_once_with(fgdb_path.stem)
+        mock_generate_tags.assert_called_once()
+        mock_search_existing.assert_called_once_with("Test Title", mock_gis)
+        mock_delete_item.assert_not_called()
+        mock_upload_item.assert_called_once_with(
+            zip_path, "Test Title", "Test,Tags", mock_gis
+        )
+
+        assert result == mock_uploaded_item
+
+    @patch("dolly.agol._upload_item_to_agol")
+    @patch("dolly.agol._delete_agol_item")
+    @patch("dolly.agol._search_existing_item")
+    @patch("dolly.agol._generate_upload_tags")
+    @patch("dolly.agol._generate_upload_title")
+    @patch("dolly.agol._create_zip_from_fgdb")
+    @patch("dolly.agol.logger")
+    def test_zip_and_upload_with_existing_item(
+        self,
+        mock_logger,
+        mock_create_zip,
+        mock_generate_title,
+        mock_generate_tags,
+        mock_search_existing,
+        mock_delete_item,
+        mock_upload_item,
+    ):
+        """Test zip and upload when existing item needs to be deleted."""
+        # Setup mocks
+        fgdb_path = Path("/test/data.gdb")
+        zip_path = Path("/test/data.zip")
+        mock_create_zip.return_value = zip_path
+        mock_generate_title.return_value = "Test Title"
+        mock_generate_tags.return_value = "Test,Tags"
+
+        existing_item = Mock()
+        existing_item.id = "existing-id"
+        mock_search_existing.return_value = [existing_item]
+        mock_delete_item.return_value = True
+
+        mock_gis = Mock()
+        mock_uploaded_item = Mock()
+        mock_upload_item.return_value = mock_uploaded_item
+
+        from dolly.agol import zip_and_upload_fgdb
+
+        result = zip_and_upload_fgdb(fgdb_path, mock_gis)
+
+        # Verify existing item was deleted
+        mock_delete_item.assert_called_once_with(existing_item)
+        mock_logger.info.assert_called_once_with(
+            f"Found existing gdb item {existing_item.id}, deleting it before uploading new gdb"
+        )
+        mock_upload_item.assert_called_once_with(
+            zip_path, "Test Title", "Test,Tags", mock_gis
+        )
+
+        assert result == mock_uploaded_item
+
+
+class TestUpdateFeatureServices:
+    """Test cases for the update_feature_services function."""
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.get_service_from_title")
+    @patch("dolly.agol._append_new_data_to_service")
+    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._get_appropriate_service_layer")
+    @patch("dolly.agol._get_service_item_from_agol")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_update_feature_services_success(
+        self,
+        mock_logger,
+        mock_get_gis,
+        mock_get_service_item,
+        mock_get_service_layer,
+        mock_truncate,
+        mock_append,
+        mock_get_service_from_title,
+        mock_retry,
+    ):
+        """Test successful update of feature services."""
+        # Setup mocks
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        mock_gdb_item = Mock()
+        mock_gdb_item.id = "gdb-item-id"
+
+        tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
+            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+        }
+
+        mock_item1 = Mock()
+        mock_item2 = Mock()
+        mock_get_service_item.side_effect = [mock_item1, mock_item2]
+
+        mock_service1 = Mock()
+        mock_service2 = Mock()
+        mock_get_service_layer.side_effect = [mock_service1, mock_service2]
+
+        mock_truncate.return_value = True
+        mock_append.return_value = True
+        mock_get_service_from_title.side_effect = ["cemeteries", "roads"]
+
+        from dolly.agol import update_feature_services
+
+        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+
+        # Verify all services were processed
+        assert mock_get_service_item.call_count == 2
+        assert mock_get_service_layer.call_count == 2
+        assert mock_truncate.call_count == 2
+        assert mock_append.call_count == 2
+
+        # Verify cleanup - gdb item should be deleted
+        mock_retry.assert_called_once_with(mock_gdb_item.delete, permanent=True)
+        mock_logger.info.assert_any_call("deleting temporary FGDB item")
+
+    @patch("dolly.agol._get_service_item_from_agol")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_update_feature_services_missing_item(
+        self, mock_logger, mock_get_gis, mock_get_service_item
+    ):
+        """Test update when AGOL item is missing."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+        mock_gdb_item = Mock()
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_get_service_item.return_value = None
+
+        from dolly.agol import update_feature_services
+
+        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+
+        # Should not delete gdb item when there are errors
+        mock_gdb_item.delete.assert_not_called()
+
+    @patch("dolly.agol._get_service_item_from_agol")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_update_feature_services_no_gis_connection_provided(
+        self, mock_logger, mock_get_gis, mock_get_service_item
+    ):
+        """Test update when no GIS connection is provided (covers line 365)."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+        mock_gdb_item = Mock()
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_get_service_item.return_value = None
+
+        from dolly.agol import update_feature_services
+
+        # Call without providing gis_connection (None by default)
+        update_feature_services(mock_gdb_item, tables, agol_items_lookup, None)
+
+        # Verify _get_gis_connection was called
+        mock_get_gis.assert_called_once()
+        mock_get_service_item.assert_called_once_with(
+            "sgid.society.cemeteries", agol_items_lookup, mock_gis
+        )
+
+    @patch("dolly.agol.get_service_from_title")
+    @patch("dolly.agol._append_new_data_to_service")
+    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._get_appropriate_service_layer")
+    @patch("dolly.agol._get_service_item_from_agol")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_update_feature_services_append_failure(
+        self,
+        mock_logger,
+        mock_get_gis,
+        mock_get_service_item,
+        mock_get_service_layer,
+        mock_truncate,
+        mock_append,
+        mock_get_service_from_title,
+    ):
+        """Test update when append operation fails (covers line 390)."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+        mock_gdb_item = Mock()
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_item = Mock()
+        mock_get_service_item.return_value = mock_item
+
+        mock_service = Mock()
+        mock_get_service_layer.return_value = mock_service
+
+        mock_truncate.return_value = True
+        mock_append.return_value = False  # This should trigger has_errors = True
+        mock_get_service_from_title.return_value = "cemeteries"
+
+        from dolly.agol import update_feature_services
+
+        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+
+        # Verify append was called and returned False
+        mock_append.assert_called_once()
+        # Should not delete gdb item when there are errors
+        mock_gdb_item.delete.assert_not_called()
+
+    @patch("dolly.agol._append_new_data_to_service")
+    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._get_appropriate_service_layer")
+    @patch("dolly.agol._get_service_item_from_agol")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_update_feature_services_with_exception(
+        self,
+        mock_logger,
+        mock_get_gis,
+        mock_get_service_item,
+        mock_get_service_layer,
+        mock_truncate,
+        mock_append,
+    ):
+        """Test update when an exception occurs during processing."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+        mock_gdb_item = Mock()
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_item = Mock()
+        mock_get_service_item.return_value = mock_item
+        mock_get_service_layer.side_effect = Exception("Service layer error")
+
+        from dolly.agol import update_feature_services
+
+        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+
+        # Should log the error
+        mock_logger.error.assert_called_once()
+        # Should not delete gdb item when there are errors
+        mock_gdb_item.delete.assert_not_called()
+
+
+class TestCreateAndPublishService:
+    """Test cases for the _create_and_publish_service function."""
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.zip_and_upload_fgdb")
+    @patch("dolly.agol.create_fgdb")
+    @patch("dolly.agol.logger")
+    def test_create_and_publish_service_success(
+        self, mock_logger, mock_create_fgdb, mock_zip_upload, mock_retry
+    ):
+        """Test successful creation and publishing of service."""
+        # Setup mocks
+        table = "sgid.society.cemeteries"
+        agol_items_lookup = {table: {"published_name": "Utah Cemeteries"}}
+        mock_gis = Mock()
+
+        fgdb_path = Path("/test/society_cemeteries.gdb")
+        mock_create_fgdb.return_value = fgdb_path
+
+        mock_single_item = Mock()
+        mock_zip_upload.return_value = mock_single_item
+
+        mock_published_item = Mock()
+        mock_retry.return_value = mock_published_item
+
+        from dolly.agol import _create_and_publish_service
+
+        result = _create_and_publish_service(table, agol_items_lookup, mock_gis)
+
+        # Verify function calls
+        mock_create_fgdb.assert_called_once_with([table], agol_items_lookup)
+        mock_zip_upload.assert_called_once_with(fgdb_path, mock_gis)
+        mock_retry.assert_called_once_with(
+            mock_single_item.publish,
+            publish_parameters={"name": fgdb_path.stem},
+            file_type="fileGeodatabase",
+        )
+        mock_single_item.delete.assert_called_once_with(permanent=True)
+
+        assert result == mock_published_item
+
+    @patch("dolly.agol.create_fgdb")
+    @patch("dolly.agol.logger")
+    def test_create_and_publish_service_exception(self, mock_logger, mock_create_fgdb):
+        """Test exception handling during service creation."""
+        table = "sgid.society.cemeteries"
+        agol_items_lookup = {table: {"published_name": "Utah Cemeteries"}}
+        mock_gis = Mock()
+
+        mock_create_fgdb.side_effect = Exception("FGDB creation failed")
+
+        from dolly.agol import _create_and_publish_service
+
+        result = _create_and_publish_service(table, agol_items_lookup, mock_gis)
+
+        assert result is None
+        mock_logger.error.assert_called_once()
+
+
+class TestConfigurePublishedService:
+    """Test cases for the _configure_published_service function."""
+
+    @patch("dolly.agol.APP_ENVIRONMENT", "prod")
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.FeatureLayerCollection")
+    @patch("dolly.agol._generate_service_title")
+    @patch("dolly.agol._generate_service_tags")
+    def test_configure_published_service_prod_success(
+        self,
+        mock_generate_tags,
+        mock_generate_title,
+        mock_flc_class,
+        mock_retry,
+    ):
+        """Test successful configuration in production environment."""
+        # Setup mocks
+        mock_item = Mock()
+        table = "sgid.society.cemeteries"
+        agol_items_lookup = {table: {"published_name": "Utah Cemeteries"}}
+
+        mock_generate_tags.return_value = "UGRC,SGID,Society"
+        mock_generate_title.return_value = "Utah Cemeteries"
+
+        mock_manager = Mock()
+        mock_flc = Mock()
+        mock_flc.manager = mock_manager
+        mock_flc_class.fromitem.return_value = mock_flc
+
+        from dolly.agol import _configure_published_service
+
+        result = _configure_published_service(mock_item, table, agol_items_lookup)
+
+        # Verify metadata update
+        mock_retry.assert_any_call(
+            mock_item.update,
+            {
+                "title": "Utah Cemeteries",
+                "description": "TBD",
+                "snippet": "TBD",
+                "tags": "UGRC,SGID,Society",
+            },
+        )
+
+        # Verify capabilities update
+        mock_retry.assert_any_call(
+            mock_manager.update_definition, {"capabilities": "Query,Extract"}
+        )
+
+        # Verify move to category folder
+        mock_retry.assert_any_call(mock_item.move, "Society")
+
+        # Verify production permissions
+        assert mock_item.sharing.sharing_level == "EVERYONE"
+        assert mock_item.content_status == "public_authoritative"
+        mock_retry.assert_any_call(mock_item.protect)
+
+        assert result is True
+
+    @patch("dolly.agol.APP_ENVIRONMENT", "dev")
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.FeatureLayerCollection")
+    @patch("dolly.agol._generate_service_title")
+    @patch("dolly.agol._generate_service_tags")
+    def test_configure_published_service_dev_success(
+        self,
+        mock_generate_tags,
+        mock_generate_title,
+        mock_flc_class,
+        mock_retry,
+    ):
+        """Test successful configuration in development environment."""
+        mock_item = Mock()
+        table = "sgid.society.cemeteries"
+        agol_items_lookup = {table: {"published_name": "Utah Cemeteries"}}
+
+        mock_generate_tags.return_value = "UGRC,SGID,Society,Test"
+        mock_generate_title.return_value = "Utah Cemeteries (Test)"
+
+        mock_manager = Mock()
+        mock_flc = Mock()
+        mock_flc.manager = mock_manager
+        mock_flc_class.fromitem.return_value = mock_flc
+
+        from dolly.agol import _configure_published_service
+
+        result = _configure_published_service(mock_item, table, agol_items_lookup)
+
+        # Should not set production permissions in dev
+        assert (
+            not hasattr(mock_item.sharing, "sharing_level")
+            or mock_item.sharing.sharing_level != "EVERYONE"
+        )
+        mock_item.protect.assert_not_called()
+
+        assert result is True
+
+    @patch("dolly.agol._generate_service_tags")
+    @patch("dolly.agol.logger")
+    def test_configure_published_service_exception(
+        self, mock_logger, mock_generate_tags
+    ):
+        """Test exception handling during service configuration."""
+        mock_item = Mock()
+        mock_item.id = "test-item-id"
+        table = "sgid.society.cemeteries"
+        agol_items_lookup = {table: {"published_name": "Utah Cemeteries"}}
+
+        mock_generate_tags.side_effect = Exception("Configuration failed")
+
+        from dolly.agol import _configure_published_service
+
+        result = _configure_published_service(mock_item, table, agol_items_lookup)
+
+        assert result is False
+        mock_logger.error.assert_called_once()
+
+
+class TestPublishNewFeatureServices:
+    """Test cases for the publish_new_feature_services function."""
+
+    @patch("dolly.agol.update_agol_item")
+    @patch("dolly.agol._configure_published_service")
+    @patch("dolly.agol._create_and_publish_service")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_publish_new_feature_services_success(
+        self,
+        mock_logger,
+        mock_get_gis,
+        mock_create_publish,
+        mock_configure,
+        mock_update_agol_item,
+    ):
+        """Test successful publishing of new feature services."""
+        # Setup mocks
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
+            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+        }
+
+        mock_item1 = Mock()
+        mock_item1.id = "item1-id"
+        mock_item2 = Mock()
+        mock_item2.id = "item2-id"
+
+        mock_create_publish.side_effect = [mock_item1, mock_item2]
+        mock_configure.return_value = True
+
+        from dolly.agol import publish_new_feature_services
+
+        publish_new_feature_services(tables, agol_items_lookup)
+
+        # Verify all tables were processed
+        assert mock_create_publish.call_count == 2
+        assert mock_configure.call_count == 2
+        assert mock_update_agol_item.call_count == 2
+
+        # Verify specific calls
+        mock_create_publish.assert_any_call(
+            "sgid.society.cemeteries", agol_items_lookup, mock_gis
+        )
+        mock_create_publish.assert_any_call(
+            "sgid.transportation.roads", agol_items_lookup, mock_gis
+        )
+
+        mock_update_agol_item.assert_any_call("sgid.society.cemeteries", "item1-id")
+        mock_update_agol_item.assert_any_call("sgid.transportation.roads", "item2-id")
+
+    @patch("dolly.agol._create_and_publish_service")
+    @patch("dolly.agol._get_gis_connection")
+    @patch("dolly.agol.logger")
+    def test_publish_new_feature_services_creation_failure(
+        self, mock_logger, mock_get_gis, mock_create_publish
+    ):
+        """Test handling of creation failure."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_create_publish.return_value = None
+
+        from dolly.agol import publish_new_feature_services
+
+        publish_new_feature_services(tables, agol_items_lookup)
+
+        # Should continue processing even if creation fails
+        mock_create_publish.assert_called_once()
+
+    @patch("dolly.agol._configure_published_service")
+    @patch("dolly.agol._create_and_publish_service")
+    @patch("dolly.agol._get_gis_connection")
+    def test_publish_new_feature_services_configuration_failure(
+        self, mock_get_gis, mock_create_publish, mock_configure
+    ):
+        """Test handling of configuration failure."""
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        tables = ["sgid.society.cemeteries"]
+        agol_items_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
+        }
+
+        mock_item = Mock()
+        mock_create_publish.return_value = mock_item
+        mock_configure.return_value = False
+
+        from dolly.agol import publish_new_feature_services
+
+        publish_new_feature_services(tables, agol_items_lookup, mock_gis)
+
+        # Should continue processing even if configuration fails
+        mock_configure.assert_called_once()
