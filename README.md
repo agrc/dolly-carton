@@ -10,9 +10,6 @@ Pull data from SGID Internal and push to AGOL
 ```bash
 # Run tests with coverage
 python -m pytest
-
-# View coverage report
-python -m pytest --cov=dolly --cov-report=term-missing
 ```
 
 Coverage reports are automatically generated and uploaded to [Codecov](https://codecov.io/gh/agrc/dolly-carton) on pull requests.
