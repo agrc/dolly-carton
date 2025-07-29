@@ -1,0 +1,32 @@
+# Codecov configuration
+# https://docs.codecov.com/docs/codecov-yaml
+
+coverage:
+  status:
+    project:
+      default:
+        target: auto
+        threshold: 1%
+        base: auto
+    patch:
+      default:
+        target: auto
+        threshold: 1%
+        base: auto
+
+  range: 50..100
+
+  ignore:
+    - "tests/**/*"
+    - "**/__pycache__/**/*"
+    - "**/.*"
+
+comment:
+  layout: "reach,diff,flags,tree,footer"
+  behavior: default
+  require_changes: false
+  require_base: false
+  require_head: true
+
+github_checks:
+  annotations: true
