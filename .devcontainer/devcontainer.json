@@ -5,7 +5,8 @@
     "target": "dev_container"
   },
   "mounts": [
-    "source=${localWorkspaceFolder}/output,target=${containerWorkspaceFolder}/output,type=bind,consistency=cached"
+    "source=${localWorkspaceFolder}/output,target=${containerWorkspaceFolder}/output,type=bind,consistency=cached",
+    "source=dolly-carton-zsh-history,target=/root/.zsh_history,type=volume"
   ],
   "customizations": {
     "vscode": {
@@ -19,6 +20,12 @@
       ],
       "python": {
         "defaultInterpreterPath": "/usr/local/bin/python"
+      },
+      "terminal.integrated.defaultProfile.linux": "zsh",
+      "terminal.integrated.profiles.linux": {
+        "zsh": {
+          "path": "/usr/bin/zsh"
+        }
       }
     }
   },
