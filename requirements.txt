@@ -1,0 +1,2 @@
+# Requirements for dolly-carton
+# No external dependencies required for the basic CLI functionality
