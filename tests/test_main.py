@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 
 import pytest
 
-from dolly.main import clean_up, cleanup_dev_agol_items, main
+from dolly.main import _main_logic, clean_up, cleanup_dev_agol_items
 
 
 class TestCleanUp:
@@ -138,7 +138,7 @@ class TestMain:
         mock_get_updated_tables.return_value = []
         mock_precisedelta.return_value = "5 seconds"
 
-        main()
+        _main_logic()
 
         # Verify function calls
         mock_clean_up.assert_called_once()
@@ -200,7 +200,7 @@ class TestMain:
         mock_datetime.now.return_value = mock_current_time
         mock_precisedelta.return_value = "10 seconds"
 
-        main()
+        _main_logic()
 
         # Verify workflow for existing services
         mock_create_fgdb.assert_called_once_with(
@@ -257,7 +257,7 @@ class TestMain:
         mock_datetime.now.return_value = mock_current_time
         mock_precisedelta.return_value = "15 seconds"
 
-        main()
+        _main_logic()
 
         # Verify workflow for new services
         mock_publish_new_feature_services.assert_called_once_with(
@@ -323,7 +323,7 @@ class TestMain:
         mock_datetime.now.return_value = mock_current_time
         mock_precisedelta.return_value = "20 seconds"
 
-        main()
+        _main_logic()
 
         # Verify both workflows are executed
         mock_create_fgdb.assert_called_once_with(
@@ -364,7 +364,7 @@ class TestMain:
 
         # Exception should propagate, but finally block should still execute
         with pytest.raises(Exception, match="Database error"):
-            main()
+            _main_logic()
 
         # Verify cleanup is called even when exception occurs
         mock_clean_up.assert_called_once()
@@ -372,6 +372,84 @@ class TestMain:
         # Verify finally block logging still executes
         mock_logger.info.assert_any_call("Starting Dolly Carton process...")
         mock_logger.info.assert_any_call("Dolly Carton process completed in 5 seconds")
+
+    @patch("dolly.main.time.time")
+    @patch("dolly.main.humanize.precisedelta")
+    @patch("dolly.main.datetime")
+    @patch("dolly.main.publish_new_feature_services")
+    @patch("dolly.main.update_feature_services")
+    @patch("dolly.main.zip_and_upload_fgdb")
+    @patch("dolly.main.create_fgdb")
+    @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.set_last_checked")
+    @patch("dolly.main.get_updated_tables")
+    @patch("dolly.main.get_last_checked")
+    @patch("dolly.main.clean_up")
+    @patch("dolly.main.logger")
+    def test_main_with_cli_tables_parameter(
+        self,
+        mock_logger,
+        mock_clean_up,
+        mock_get_last_checked,
+        mock_get_updated_tables,
+        mock_set_last_checked,
+        mock_get_agol_items_lookup,
+        mock_create_fgdb,
+        mock_zip_and_upload_fgdb,
+        mock_update_feature_services,
+        mock_publish_new_feature_services,
+        mock_datetime,
+        mock_precisedelta,
+        mock_time,
+    ):
+        """Test main function with CLI tables parameter overriding automatic detection."""
+        # Setup mocks
+        mock_time.side_effect = [1000.0, 1015.0]
+        mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
+        mock_precisedelta.return_value = "15 seconds"
+
+        mock_fgdb_path = Path("/test/output/data.gdb")
+        mock_create_fgdb.return_value = mock_fgdb_path
+
+        mock_gdb_item = Mock()
+        mock_zip_and_upload_fgdb.return_value = mock_gdb_item
+
+        # Call main with CLI tables parameter
+        _main_logic(tables="sgid.society.cemeteries,sgid.transportation.roads")
+
+        # Verify function calls
+        mock_clean_up.assert_called_once()
+
+        # get_last_checked and get_updated_tables should NOT be called when using CLI tables
+        mock_get_last_checked.assert_not_called()
+        mock_get_updated_tables.assert_not_called()
+
+        # set_last_checked should NOT be called when using CLI tables
+        mock_set_last_checked.assert_not_called()
+
+        mock_get_agol_items_lookup.assert_called_once()
+
+        # Both services should be processed (one existing, one new)
+        mock_create_fgdb.assert_called_once_with(
+            ["sgid.society.cemeteries"], self.mock_agol_items_lookup
+        )
+        mock_zip_and_upload_fgdb.assert_called_once_with(mock_fgdb_path)
+        mock_update_feature_services.assert_called_once_with(
+            mock_gdb_item,
+            ["sgid.society.cemeteries"],
+            self.mock_agol_items_lookup,
+        )
+        mock_publish_new_feature_services.assert_called_once_with(
+            ["sgid.transportation.roads"],
+            self.mock_agol_items_lookup,
+        )
+
+        # Verify logging
+        mock_logger.info.assert_any_call("Starting Dolly Carton process...")
+        mock_logger.info.assert_any_call(
+            "Using CLI-provided tables: ['sgid.society.cemeteries', 'sgid.transportation.roads']"
+        )
+        mock_logger.info.assert_any_call("Dolly Carton process completed in 15 seconds")
 
 
 class TestCleanupDevAgolItems:

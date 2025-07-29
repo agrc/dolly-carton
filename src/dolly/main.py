@@ -2,8 +2,10 @@ import logging
 import os
 import time
 from datetime import datetime, timedelta
+from typing import Optional
 
 import humanize
+import typer
 from arcgis.gis import GIS
 from osgeo import gdal
 
@@ -47,9 +49,12 @@ def clean_up() -> None:
     logger.info("Cleaned up temporary files.")
 
 
-def main() -> None:
+def _main_logic(tables: Optional[str] = None) -> None:
     """
-    Main function to run the Dolly Carton process.
+    Core logic for the Dolly Carton process.
+
+    Args:
+        tables: Optional comma-separated list of tables to process.
     """
     start_time = time.time()
     logger.info("Starting Dolly Carton process...")
@@ -57,11 +62,18 @@ def main() -> None:
     try:
         clean_up()
 
-        last_checked = get_last_checked()
-        logger.info(f"Last checked: {last_checked}")
+        # Use CLI-provided tables if specified, otherwise use change detection
+        if tables:
+            updated_tables = [
+                table.strip() for table in tables.split(",") if table.strip()
+            ]
+            logger.info(f"Using CLI-provided tables: {updated_tables}")
+        else:
+            last_checked = get_last_checked()
+            logger.info(f"Last checked: {last_checked}")
 
-        updated_tables = get_updated_tables(last_checked)
-        logger.info(f"Updated tables: {updated_tables}")
+            updated_tables = get_updated_tables(last_checked)
+            logger.info(f"Updated tables: {updated_tables}")
 
         if not updated_tables:
             logger.info("No updated tables found.")
@@ -106,8 +118,10 @@ def main() -> None:
             logger.info("No new feature services to publish.")
 
         # Update the last checked timestamp after successful processing
-        current_time = datetime.now()
-        set_last_checked(current_time)
+        # Only update if we used change detection (not CLI tables)
+        if not tables:
+            current_time = datetime.now()
+            set_last_checked(current_time)
 
     finally:
         end_time = time.time()
@@ -116,6 +130,18 @@ def main() -> None:
         logger.info(
             f"Dolly Carton process completed in {humanize.precisedelta(duration_delta)}"
         )
+
+
+def main(
+    tables: Optional[str] = typer.Option(
+        None,
+        help="Comma-separated list of tables to process (e.g., sgid.society.cemeteries,sgid.boundaries.municipalities). If provided, overrides automatic change detection.",
+    ),
+) -> None:
+    """
+    Dolly Carton: Pull data from SGID Internal and push to AGOL
+    """
+    _main_logic(tables)
 
 
 def cleanup_dev_agol_items() -> None:
@@ -168,3 +194,8 @@ def cleanup_dev_agol_items() -> None:
         logger.info(
             f"Dev feature services cleanup completed in {humanize.precisedelta(duration_delta)}"
         )
+
+
+def cli() -> None:
+    """CLI entry point for the dolly command."""
+    typer.run(main)

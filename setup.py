@@ -39,6 +39,7 @@ setup(
         "google-cloud-firestore==2.*",
         "humanize==4.*",
         "pyodbc==5.*",
+        "typer==0.*",
     ],
     extras_require={
         "tests": [
@@ -55,7 +56,7 @@ setup(
     ],
     entry_points={
         "console_scripts": [
-            "dolly=dolly.main:main",
+            "dolly=dolly.main:cli",
             "dolly-cleanup-dev-agol=dolly.main:cleanup_dev_agol_items",
         ]
     },
