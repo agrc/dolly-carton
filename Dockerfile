@@ -29,7 +29,25 @@ RUN apt-get update \
 FROM base AS dev_container
 
 ENV APP_ENVIRONMENT=dev
-RUN apt-get update && apt-get install -y git && rm -rf /var/lib/apt/lists/*
+
+# Install zsh and oh-my-zsh for better terminal experience
+RUN apt-get update && apt-get install -y \
+    git \
+    zsh \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Oh My Zsh for root user
+RUN sh -c "$(curl -fsSL https://raw.github.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended
+
+# Install zsh-autosuggestions plugin
+RUN git clone https://github.com/zsh-users/zsh-autosuggestions /root/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+
+# Create proper .zshrc configuration
+RUN printf '# Path to your oh-my-zsh installation.\nexport ZSH="$HOME/.oh-my-zsh"\n\n# Set name of the theme to load\nZSH_THEME="robbyrussell"\n\n# Which plugins would you like to load?\nplugins=(git zsh-autosuggestions)\n\nsource $ZSH/oh-my-zsh.sh\n\n# History configuration\nHISTSIZE=10000\nSAVEHIST=10000\nHISTFILE=/root/.zsh_history\nsetopt HIST_IGNORE_DUPS\nsetopt HIST_FIND_NO_DUPS\nsetopt SHARE_HISTORY\nsetopt APPEND_HISTORY\n\n# Enable autosuggestions\nZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#666666"\n' > /root/.zshrc
+
+# Set zsh as the default shell
+RUN chsh -s $(which zsh)
 
 
 FROM base AS prod
