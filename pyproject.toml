@@ -1,7 +1,34 @@
 ignore = ["E501"]
+
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = ["tests"]
 norecursedirs = [".env", "data", "maps", ".github", ".vscode"]
 console_output_style = "count"
-addopts = "--cov-branch --cov=dolly-carton --cov-report term --cov-report xml:cov.xml --instafail"
+addopts = "--cov-branch --cov=dolly --cov-report term --cov-report xml:cov.xml --instafail"
+
+[tool.coverage.run]
+source = ["src/dolly"]
+branch = true
+omit = [
+    "*/tests/*",
+    "*/__pycache__/*",
+    "*/.*",
+]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod",
+]
+
+[tool.coverage.xml]
+output = "cov.xml"
