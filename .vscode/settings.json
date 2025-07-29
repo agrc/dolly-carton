@@ -5,6 +5,7 @@
     "charliermarsh",
     "cloudb",
     "cloudrun",
+    "cooldown",
     "deqmap",
     "firestore",
     "fromitem",
