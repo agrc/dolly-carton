@@ -74,7 +74,7 @@ class TestGenerateUploadTags:
         """Test tags generation in production environment."""
         result = _generate_upload_tags()
 
-        expected = "Temporary,Dolly-Carton"
+        expected = "Temp"
         assert result == expected
 
     @patch("dolly.agol.APP_ENVIRONMENT", "dev")
@@ -82,7 +82,7 @@ class TestGenerateUploadTags:
         """Test tags generation in development environment."""
         result = _generate_upload_tags()
 
-        expected = "Temporary,Dolly-Carton,Test"
+        expected = "Temp,Test"
         assert result == expected
 
     @patch("dolly.agol.APP_ENVIRONMENT", "staging")
@@ -90,7 +90,7 @@ class TestGenerateUploadTags:
         """Test tags generation in other environments (treated as prod)."""
         result = _generate_upload_tags()
 
-        expected = "Temporary,Dolly-Carton"
+        expected = "Temp"
         assert result == expected
 
 
