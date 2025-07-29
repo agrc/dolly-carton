@@ -9,7 +9,7 @@ concurrency:
 
 jobs:
   test-unit:
-    name: Unit tests
+    name: Test
     runs-on: ubuntu-latest
 
     steps:
@@ -18,20 +18,14 @@ jobs:
         with:
           show-progress: false
 
-      - name: 🐍 Set up Python
-        uses: actions/setup-python@v5
-        with:
-          cache: pip
-          cache-dependency-path: setup.py
-
-      - name: 🏗 Install module
-        run: pip install .[tests]
+      - name: 🐳 Build Docker image
+        run: docker build --target test -t dolly-carton:test .
 
       - name: 🧶 Lint
-        run: ruff check --output-format=github .
+        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace dolly-carton:test ruff check --output-format=github .
 
       - name: 🧪 Run pytest
-        run: pytest
+        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace dolly-carton:test pytest
 
       - name: ⬆️ Upload coverage to Codecov
         uses: codecov/codecov-action@v5
