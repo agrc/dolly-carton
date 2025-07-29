@@ -26,6 +26,7 @@ RUN apt-get update \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/*
 
+
 FROM base AS dev_container
 
 ENV APP_ENVIRONMENT=dev
@@ -50,10 +51,22 @@ RUN printf '# Path to your oh-my-zsh installation.\nexport ZSH="$HOME/.oh-my-zsh
 RUN chsh -s $(which zsh)
 
 
-FROM base AS prod
+FROM base AS test
 
-# Allow statements and log messages to immediately appear in the Knative logs
-ENV PYTHONUNBUFFERED=True
+ENV APP_ENVIRONMENT=dev
+
+COPY . /app
+
+WORKDIR /app
+
+# Create dummy secrets file for testing
+RUN cp /app/src/dolly/secrets/secrets_template.json /app/src/dolly/secrets/secrets.json
+
+# use -e so that the secrets file will be used in the tests
+RUN pip install -e .[tests] --break-system-packages
+
+
+FROM base AS prod
 
 COPY . /app
 
