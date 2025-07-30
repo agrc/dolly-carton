@@ -51,10 +51,17 @@ def clean_up() -> None:
 
 def _main_logic(tables: Optional[str] = None) -> None:
     """
-    Core logic for the Dolly Carton process.
+    Core business logic for the Dolly Carton process.
+
+    This function is separated from main() to enable easier testing. Since Typer's main()
+    function uses decorators and dependency injection for CLI argument parsing, it's
+    difficult to test directly. By extracting the core logic into this function,
+    we can test the business logic independently by passing parameters directly,
+    while keeping the CLI interface clean and modern with Typer.
 
     Args:
         tables: Optional comma-separated list of tables to process.
+                If provided, overrides automatic change detection.
     """
     start_time = time.time()
     logger.info("Starting Dolly Carton process...")
@@ -140,6 +147,10 @@ def main(
 ) -> None:
     """
     Dolly Carton: Pull data from SGID Internal and push to AGOL
+
+    This is the main CLI entry point using Typer for argument parsing and rich help output.
+    The actual business logic is implemented in _main_logic() to enable easier unit testing
+    without dealing with Typer's CLI framework complexities.
     """
     _main_logic(tables)
 
@@ -197,5 +208,11 @@ def cleanup_dev_agol_items() -> None:
 
 
 def cli() -> None:
-    """CLI entry point for the dolly command."""
+    """
+    CLI entry point for the dolly command defined in setup.py.
+
+    This function is the actual console script entry point that gets called when
+    users run 'dolly' from the command line. It uses typer.run() to handle
+    the CLI framework setup and delegates to main() for argument processing.
+    """
     typer.run(main)
