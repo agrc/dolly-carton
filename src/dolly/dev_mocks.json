@@ -16,7 +16,7 @@
       "published_name": "Utah DEQ Map Tier 2 Report Year"
     },
     "sgid.transportation.roads": {
-      "item_id": "a4e0b2f3ab364c31955a83ce3d30d3c6",
+      "item_id": null,
       "geometry_type": "POLYLINE",
       "published_name": "Utah Roads"
     },
