@@ -30,7 +30,7 @@ runs:
       run: |
         echo "TOPIC_NAME=dolly-topic" >> "${GITHUB_OUTPUT}"
         echo "CRON=0 2 * * *" >> "${GITHUB_OUTPUT}"
-        echo "JOB_NAME=nightly" >> "${GITHUB_OUTPUT}"
+        echo "JOB_NAME=dolly-nightly" >> "${GITHUB_OUTPUT}"
         echo "JOB_DESCRIPTION=Trigger dolly carton every evening at 8 PM MDT" >> "${GITHUB_OUTPUT}"
 
     - name: 🗝️ Authenticate to Google Cloud
