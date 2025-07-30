@@ -21,6 +21,9 @@ setup(
     url="https://github.com/agrc/dolly-carton",
     packages=find_packages("src"),
     package_dir={"": "src"},
+    package_data={
+        "dolly": ["dev_mocks.json"],
+    },
     include_package_data=True,
     zip_safe=True,
     classifiers=[
