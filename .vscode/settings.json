@@ -18,7 +18,9 @@
     "PYTHONUNBUFFERED",
     "rptyr",
     "ryanluker",
-    "saltlake"
+    "saltlake",
+    "sharedvpc",
+    "subnetworks"
   ],
   "editor.formatOnSave": true,
   "python.languageServer": "Pylance",
