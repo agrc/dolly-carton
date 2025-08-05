@@ -76,16 +76,14 @@ def get_secrets():
     Returns:
         dict: The secrets .json loaded as a dictionary, or mock secrets for testing
     """
-    secret_folder = Path(__file__).parent / "secrets"
-
     #: Try to get the secrets from the Cloud Run mount point
-    cloud_secrets_file = secret_folder / "app" / "secrets.json"
-    if secret_folder.exists() and cloud_secrets_file.exists():
+    cloud_secrets_file = Path("/secrets") / "app" / "secrets.json"
+    if cloud_secrets_file.exists():
         return json.loads(cloud_secrets_file.read_text(encoding="utf-8"))
 
     #: Otherwise, try to load a local copy for local development
-    local_secrets_file = secret_folder / "secrets.json"
-    if secret_folder.exists() and local_secrets_file.exists():
+    local_secrets_file = Path(__file__).parent / "secrets.json"
+    if local_secrets_file.exists():
         return json.loads(local_secrets_file.read_text(encoding="utf-8"))
 
     #: If we're in a testing environment (pytest is running), return mock secrets
