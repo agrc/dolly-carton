@@ -366,6 +366,8 @@ class TestGetAgolItemsLookup:
 class TestCreateFgdb:
     """Test cases for the create_fgdb function."""
 
+    @patch("dolly.internal.get_table_field_domains")
+    @patch("dolly.internal._get_database_connection")
     @patch("dolly.internal._generate_output_path")
     @patch("dolly.internal.get_gdal_layer_name")
     @patch("dolly.internal._get_geometry_option")
@@ -380,11 +382,19 @@ class TestCreateFgdb:
         mock_get_geom_option,
         mock_get_layer_name,
         mock_generate_path,
+        mock_get_db_connection,
+        mock_get_table_field_domains,
     ):
         """Test successful FGDB creation with provided GDAL connection."""
         # Setup mocks
         mock_gdal_connection = Mock()
         mock_gdal_connection.GetLayerCount.return_value = 5
+
+        mock_db_connection = Mock()
+        mock_get_db_connection.return_value = mock_db_connection
+
+        # Mock field domains function to return empty dict
+        mock_get_table_field_domains.return_value = {}
 
         mock_generate_path.return_value = Path("/test/output.gdb")
         mock_get_layer_name.return_value = "test_layer"
@@ -407,6 +417,8 @@ class TestCreateFgdb:
         mock_translate.assert_called_once()
         mock_logger.info.assert_called()
 
+    @patch("dolly.internal.get_table_field_domains")
+    @patch("dolly.internal._get_database_connection")
     @patch("dolly.internal._get_gdal_connection")
     @patch("dolly.internal._generate_output_path")
     @patch("dolly.internal.get_gdal_layer_name")
@@ -421,12 +433,20 @@ class TestCreateFgdb:
         mock_get_layer_name,
         mock_generate_path,
         mock_get_gdal_connection,
+        mock_get_db_connection,
+        mock_get_table_field_domains,
     ):
         """Test that function creates GDAL connection when none provided."""
         # Setup mocks
         mock_gdal_connection = Mock()
         mock_gdal_connection.GetLayerCount.return_value = 5
         mock_get_gdal_connection.return_value = mock_gdal_connection
+
+        mock_db_connection = Mock()
+        mock_get_db_connection.return_value = mock_db_connection
+
+        # Mock field domains function to return empty dict
+        mock_get_table_field_domains.return_value = {}
 
         mock_generate_path.return_value = Path("/test/output.gdb")
         mock_get_layer_name.return_value = "test_layer"
@@ -446,6 +466,8 @@ class TestCreateFgdb:
 
         assert result == Path("/test/output.gdb")
         mock_get_gdal_connection.assert_called_once()
+        mock_gdal_connection.GetLayerCount.assert_called_once()
+        mock_translate.assert_called_once()
 
     def test_raises_error_for_empty_tables_list(self):
         """Test that function raises ValueError for empty tables list."""
