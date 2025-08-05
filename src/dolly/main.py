@@ -16,6 +16,7 @@ from dolly.agol import (
 )
 from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
 from dolly.state import get_last_checked, set_last_checked
+from dolly.summary import finish_summary, start_summary
 from dolly.utils import OUTPUT_PATH, get_secrets
 
 logging.basicConfig(level=logging.INFO)
@@ -63,8 +64,9 @@ def _main_logic(tables: Optional[str] = None) -> None:
         tables: Optional comma-separated list of tables to process.
                 If provided, overrides automatic change detection.
     """
-    start_time = time.time()
     logger.info("Starting Dolly Carton process...")
+
+    start_summary(time.time(), cli_tables_provided=bool(tables))
 
     try:
         clean_up()
@@ -84,6 +86,7 @@ def _main_logic(tables: Optional[str] = None) -> None:
 
         if not updated_tables:
             logger.info("No updated tables found.")
+
             return
 
         agol_items_lookup = get_agol_items_lookup()
@@ -131,12 +134,7 @@ def _main_logic(tables: Optional[str] = None) -> None:
             set_last_checked(current_time)
 
     finally:
-        end_time = time.time()
-        duration = end_time - start_time
-        duration_delta = timedelta(seconds=duration)
-        logger.info(
-            f"Dolly Carton process completed in {humanize.precisedelta(duration_delta)}"
-        )
+        finish_summary(time.time())
 
 
 def main(
