@@ -6,11 +6,13 @@
 - **Always use ruff for code formatting** - Run `ruff format` on any modified Python files
 - **Include newlines before return statements** - Add a blank line before all `return` statements for better readability
 - **Follow existing project patterns** - Maintain consistency with the current codebase style
+- **Top-level imports** - Place all imports at the top of the file
 
 ### Testing Patterns
 - **Use pytest-style test classes** - Do not inherit from `unittest.TestCase`
 - **Use direct imports** - Prefer `from module import function` over `import module as alias` when testing specific functions
 - **Include comprehensive test coverage** - Add tests for both success and failure scenarios
+- **Ask before you write tests** - After writing new code, ask before writing tests to allow me to review the changes first
 
 ### Documentation
 - **Clear docstrings** - Include parameter descriptions and note which parameters are primarily for testing purposes
