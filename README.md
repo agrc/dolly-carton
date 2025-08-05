@@ -1,4 +1,4 @@
-# Dolly Carton
+# 🛒 Dolly Carton
 
 [![codecov](https://codecov.io/gh/agrc/dolly-carton/branch/main/graph/badge.svg)](https://codecov.io/gh/agrc/dolly-carton)
 
