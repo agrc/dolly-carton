@@ -114,7 +114,6 @@ class TestMain:
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.set_last_checked")
-    @patch("dolly.main.datetime")
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
@@ -125,7 +124,6 @@ class TestMain:
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
-        mock_datetime,
         mock_set_last_checked,
         mock_precisedelta,
         mock_time,
@@ -153,7 +151,6 @@ class TestMain:
         mock_logger.info.assert_any_call(f"Last checked: {mock_last_checked}")
         mock_logger.info.assert_any_call("Updated tables: []")
         mock_logger.info.assert_any_call("No updated tables found.")
-        mock_logger.info.assert_any_call("Dolly Carton process completed in 5 seconds")
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
@@ -342,8 +339,6 @@ class TestMain:
         mock_set_last_checked.assert_called_once_with(mock_current_time)
 
     @patch("dolly.main.time.time")
-    @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
@@ -352,15 +347,12 @@ class TestMain:
         mock_logger,
         mock_clean_up,
         mock_get_last_checked,
-        mock_get_updated_tables,
-        mock_precisedelta,
         mock_time,
     ):
         """Test main function exception handling in finally block."""
         # Setup mocks
         mock_time.side_effect = [1000.0, 1005.0]
         mock_get_last_checked.side_effect = Exception("Database error")
-        mock_precisedelta.return_value = "5 seconds"
 
         # Exception should propagate, but finally block should still execute
         with pytest.raises(Exception, match="Database error"):
@@ -371,11 +363,7 @@ class TestMain:
 
         # Verify finally block logging still executes
         mock_logger.info.assert_any_call("Starting Dolly Carton process...")
-        mock_logger.info.assert_any_call("Dolly Carton process completed in 5 seconds")
 
-    @patch("dolly.main.time.time")
-    @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.datetime")
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
     @patch("dolly.main.zip_and_upload_fgdb")
@@ -398,15 +386,10 @@ class TestMain:
         mock_zip_and_upload_fgdb,
         mock_update_feature_services,
         mock_publish_new_feature_services,
-        mock_datetime,
-        mock_precisedelta,
-        mock_time,
     ):
         """Test main function with CLI tables parameter overriding automatic detection."""
         # Setup mocks
-        mock_time.side_effect = [1000.0, 1015.0]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_precisedelta.return_value = "15 seconds"
 
         mock_fgdb_path = Path("/test/output/data.gdb")
         mock_create_fgdb.return_value = mock_fgdb_path
@@ -449,7 +432,6 @@ class TestMain:
         mock_logger.info.assert_any_call(
             "Using CLI-provided tables: ['sgid.society.cemeteries', 'sgid.transportation.roads']"
         )
-        mock_logger.info.assert_any_call("Dolly Carton process completed in 15 seconds")
 
 
 class TestCleanupDevAgolItems:

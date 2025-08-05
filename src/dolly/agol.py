@@ -8,6 +8,7 @@ from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
 from arcgis.gis import GIS, Item
 
 from dolly.internal import create_fgdb, update_agol_item
+from dolly.summary import get_current_summary
 from dolly.utils import get_secrets, get_service_from_title, retry
 
 logger = logging.getLogger(__name__)
@@ -362,12 +363,17 @@ def update_feature_services(
     if gis_connection is None:
         gis_connection = _get_gis_connection()
 
+    summary = get_current_summary()
     has_errors = False
     for table in tables:
         # Get the AGOL item for this table
         item = _get_service_item_from_agol(table, agol_items_lookup, gis_connection)
         if item is None:
             has_errors = True
+            error_msg = "Could not find AGOL item"
+            logger.error(f"Failed to update feature service for {table}: {error_msg}")
+            if summary:
+                summary.add_table_error(table, "update", error_msg)
             continue
 
         try:
@@ -388,9 +394,21 @@ def update_feature_services(
 
             if not success:
                 has_errors = True
+                error_msg = "Failed to append new data"
+                logger.error(
+                    f"Failed to update feature service for {table}: {error_msg}"
+                )
+                if summary:
+                    summary.add_table_error(table, "update", error_msg)
+            else:
+                logger.info(f"Successfully updated feature service for {table}")
+                if summary:
+                    summary.add_table_updated(table)
         except Exception as e:
             logger.error(f"Failed to update feature service for {table}: {e}")
             has_errors = True
+            if summary:
+                summary.add_table_error(table, "update", str(e))
             continue
 
     if not has_errors:
@@ -512,20 +530,31 @@ def publish_new_feature_services(
     if gis_connection is None:
         gis_connection = _get_gis_connection()
 
+    summary = get_current_summary()
     for table in tables:
         logger.info(f"Publishing new feature service for table {table}")
 
         # Create FGDB and publish as feature service
         item = _create_and_publish_service(table, agol_items_lookup, gis_connection)
         if item is None:
+            error_msg = "Failed to create and publish service"
+            logger.error(f"Failed to publish feature service for {table}: {error_msg}")
+            if summary:
+                summary.add_table_error(table, "publish", error_msg)
             continue
 
         # Configure the published service
         success = _configure_published_service(item, table, agol_items_lookup)
         if not success:
+            error_msg = "Failed to configure published service"
+            logger.error(f"Failed to publish feature service for {table}: {error_msg}")
+            if summary:
+                summary.add_table_error(table, "publish", error_msg)
             continue
 
         logger.info(f"Published new feature service for {table} with item ID {item.id}")
+        if summary:
+            summary.add_table_published(table)
 
         # Update the internal database with the new item ID
         update_agol_item(table, item.id)
