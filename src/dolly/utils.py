@@ -82,7 +82,7 @@ def get_secrets():
         return json.loads(cloud_secrets_file.read_text(encoding="utf-8"))
 
     #: Otherwise, try to load a local copy for local development
-    local_secrets_file = Path(__file__).parent / "secrets.json"
+    local_secrets_file = Path(__file__).parent / "secrets" / "secrets.json"
     if local_secrets_file.exists():
         return json.loads(local_secrets_file.read_text(encoding="utf-8"))
 
