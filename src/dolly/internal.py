@@ -8,6 +8,12 @@ from typing import cast
 import pyodbc
 from osgeo import gdal
 
+from dolly.domains import (
+    apply_domains_to_fields,
+    create_domains_in_fgdb,
+    get_domain_metadata,
+    get_table_field_domains,
+)
 from dolly.utils import (
     FGDB_PATH,
     OUTPUT_PATH,
@@ -371,6 +377,7 @@ def create_fgdb(
 
         output_gdb_path = _generate_output_path(tables, agol_items_lookup)
 
+        # Copy tables first to create the FGDB structure
         tables_copied = False
         for table in tables:
             success = _copy_table_to_fgdb(
@@ -381,6 +388,57 @@ def create_fgdb(
 
         if not tables_copied:
             raise Exception("FGDB creation failed for all tables.")
+
+        db_connection = _get_database_connection()
+        try:
+            # Get field-domain mappings for each table first
+            table_field_domains = {}
+            used_domain_names = set()
+
+            for table in tables:
+                field_domains = get_table_field_domains(table, db_connection)
+                if field_domains:
+                    # Use the service name as the layer name in FGDB
+                    service_name = get_service_from_title(
+                        agol_items_lookup[table]["published_name"]
+                    )
+                    table_field_domains[service_name] = field_domains
+                    # Collect domain names used by this table
+                    used_domain_names.update(field_domains.values())
+
+            # Get all domain metadata and filter to only the ones actually used
+            if used_domain_names:
+                logger.info(
+                    f"Found {len(used_domain_names)} unique domains used by tables"
+                )
+                all_domains = get_domain_metadata(db_connection)
+                # Filter to only include domains that are actually used by the tables
+                domains = {
+                    name: info
+                    for name, info in all_domains.items()
+                    if name in used_domain_names
+                }
+                logger.info(
+                    f"Filtered to {len(domains)} domains for the specified tables"
+                )
+            else:
+                domains = {}
+                logger.info("No domain associations found for the specified tables")
+
+            # Create domains in FGDB if any were found
+            if domains:
+                logger.info(f"Creating {len(domains)} domains in FGDB")
+                create_domains_in_fgdb(domains, str(output_gdb_path))
+            else:
+                logger.info("No domains found for the specified tables")
+
+            # Apply domain associations to fields
+            if table_field_domains:
+                logger.info("Applying domain associations to copied tables")
+                apply_domains_to_fields(str(output_gdb_path), table_field_domains)
+
+        finally:
+            db_connection.close()
 
         return output_gdb_path
     finally:
