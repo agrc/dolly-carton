@@ -42,6 +42,7 @@ setup(
         "google-cloud-firestore==2.*",
         "humanize==4.*",
         "pyodbc==5.*",
+        "requests==2.*",
         "typer==0.*",
     ],
     extras_require={

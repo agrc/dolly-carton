@@ -12,6 +12,7 @@
     "firestore",
     "fromitem",
     "GDAL",
+    "gethostname",
     "ITEMTYPES",
     "MSSQLSPATIAL",
     "noninteractive",
