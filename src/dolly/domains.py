@@ -3,7 +3,7 @@ import xml.etree.ElementTree as ET
 from typing import Dict, Optional
 
 import pyodbc
-from osgeo import gdal
+from osgeo import gdal, ogr
 
 logger = logging.getLogger(__name__)
 
@@ -309,8 +309,6 @@ def create_coded_value_domain(
     logger.info(f"Creating coded value domain: {domain_name}")
 
     try:
-        from osgeo import ogr
-
         # Convert Esri field type to OGR field type
         field_type_map = {
             "esriFieldTypeString": ogr.OFTString,
@@ -387,8 +385,6 @@ def create_range_domain(
     logger.info(f"Creating range domain: {domain_name}")
 
     try:
-        from osgeo import ogr
-
         # Convert Esri field type to OGR field type
         field_type_map = {
             "esriFieldTypeString": ogr.OFTString,
@@ -520,8 +516,6 @@ def apply_domains_to_fields(
                         continue
 
                     # Create a new field definition with the domain
-                    from osgeo import ogr
-
                     new_field_defn = ogr.FieldDefn(
                         field_defn.GetName(), field_defn.GetType()
                     )
