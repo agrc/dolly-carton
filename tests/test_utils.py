@@ -509,6 +509,7 @@ class TestGetSecrets:
                 "INTERNAL_USERNAME": "test_user",
                 "INTERNAL_PASSWORD": "test_password",
                 "INTERNAL_DATABASE": "test_db",
+                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test/webhook",
             }
 
     @patch("dolly.utils.json.loads")

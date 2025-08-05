@@ -30,7 +30,6 @@
     "sgid.society.cemeteries",
     "sgid.boundaries.municipalities",
     "sgid.environment.deqmap_tier2rptyr",
-    "sgid.transportation.roads",
     "sgid.cadastre.parcels_saltlake"
   ]
 }

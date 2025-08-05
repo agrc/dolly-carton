@@ -95,6 +95,7 @@ def get_secrets():
             "INTERNAL_USERNAME": "test_user",
             "INTERNAL_PASSWORD": "test_password",
             "INTERNAL_DATABASE": "test_db",
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test/webhook",
         }
 
     raise FileNotFoundError("Secrets folder not found; secrets not loaded.")

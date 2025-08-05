@@ -2,7 +2,9 @@
 
 import time
 from datetime import timedelta
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
+
+import requests
 
 from dolly.summary import (
     ProcessSummary,
@@ -177,11 +179,15 @@ class TestSummaryGlobalFunctions:
         assert not summary.cli_tables_provided
         assert summary.change_detection_used
 
+    @patch("dolly.summary.get_secrets")
     @patch("dolly.summary.logger")
-    def test_finish_summary(self, mock_logger):
+    def test_finish_summary(self, mock_logger, mock_get_secrets):
         """Test finishing summary."""
         start_time = time.time()
         end_time = start_time + 10
+
+        # Mock secrets to prevent Slack posting
+        mock_get_secrets.return_value = {}
 
         # Start a summary
         summary = start_summary(start_time)
@@ -203,3 +209,140 @@ class TestSummaryGlobalFunctions:
 
         current = get_current_summary()
         assert current is None
+
+
+@patch("dolly.summary.requests.post")
+class TestSlackIntegration:
+    """Test cases for Slack integration functionality."""
+
+    def test_format_slack_message_success(self, mock_post):
+        """Test formatting a successful process summary as Slack message."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_published("sgid.test.table1")
+
+        message = summary.format_slack_message()
+
+        assert "blocks" in message
+        assert (
+            len(message["blocks"]) >= 5
+        )  # Header, status, context, metrics, divider + tables
+
+        # Check that the message contains key elements
+        message_text = str(message)
+        assert "🟢" in message_text  # Success emoji
+        assert "Process completed successfully" in message_text
+        assert "sgid.test.table1" in message_text
+
+    def test_format_slack_message_with_errors(self, mock_post):
+        """Test formatting a process summary with errors as Slack message."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+        summary.add_table_error("sgid.test.table1", "update", "Connection failed")
+
+        message = summary.format_slack_message()
+
+        assert "blocks" in message
+        blocks = message["blocks"]
+        assert (
+            len(blocks) >= 5
+        )  # Header, status, context, metrics, divider + error sections
+
+        # Check that the message contains key elements
+        message_text = str(message)
+        assert "🟡" in message_text  # Warning emoji
+        assert "Process completed with errors" in message_text
+        assert "sgid.test.table1" in message_text
+        assert "Connection failed" in message_text
+
+    def test_format_slack_message_no_tables(self, mock_post):
+        """Test formatting a summary with no tables processed."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+
+        message = summary.format_slack_message()
+
+        assert "blocks" in message
+        blocks = message["blocks"]
+        assert (
+            len(blocks) >= 4
+        )  # Header, status, context, metrics (no divider since no tables)
+
+        # Check that the message contains key elements
+        message_text = str(message)
+        assert "🔵" in message_text  # Blue emoji
+        assert "Process completed - no tables required processing" in message_text
+
+    def test_post_to_slack_success(self, mock_post):
+        """Test successful posting to Slack."""
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        summary = ProcessSummary()
+        result = summary.post_to_slack("https://hooks.slack.com/test")
+
+        assert result is True
+        mock_post.assert_called_once()
+
+    def test_post_to_slack_failure(self, mock_post):
+        """Test failed posting to Slack."""
+        mock_response = MagicMock()
+        mock_response.status_code = 400
+        mock_response.text = "Bad request"
+        mock_post.return_value = mock_response
+
+        summary = ProcessSummary()
+        result = summary.post_to_slack("https://hooks.slack.com/test")
+
+        assert result is False
+
+    def test_post_to_slack_request_exception(self, mock_post):
+        """Test Slack posting with request exception."""
+        mock_post.side_effect = requests.exceptions.RequestException("Network error")
+
+        summary = ProcessSummary()
+        result = summary.post_to_slack("https://hooks.slack.com/test")
+
+        assert result is False
+
+    @patch("dolly.summary.get_secrets")
+    def test_finish_summary_with_slack(self, mock_get_secrets, mock_post):
+        """Test finish_summary posts to Slack when webhook URL is available."""
+        # Mock successful HTTP response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_post.return_value = mock_response
+
+        # Start a summary so we have a current one
+        start_time = time.time()
+        summary = start_summary(start_time)
+
+        # Mock secrets with Slack webhook
+        mock_get_secrets.return_value = {
+            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test"
+        }
+
+        finish_summary(start_time + 10)
+
+        # Verify that requests.post was called (meaning Slack posting was attempted)
+        mock_post.assert_called_once()
+
+    @patch("dolly.summary.get_secrets")
+    def test_finish_summary_no_slack_webhook(self, mock_get_secrets, mock_post):
+        """Test finish_summary when no Slack webhook URL is configured."""
+        # Start a summary so we have a current one
+        start_time = time.time()
+        summary = start_summary(start_time)
+
+        # Mock secrets without Slack webhook
+        mock_get_secrets.return_value = {}
+
+        finish_summary(start_time + 10)
+
+        # Verify that requests.post was NOT called (no Slack posting attempted)
+        mock_post.assert_not_called()
