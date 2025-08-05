@@ -211,3 +211,4 @@ output/*
 !output/.gitkeep
 *.DS_Store
 secrets.json
+secrets.*.json
