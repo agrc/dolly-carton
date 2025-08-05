@@ -1,45 +1,46 @@
-# dolly-carton
+# Dolly Carton
 
 [![codecov](https://codecov.io/gh/agrc/dolly-carton/branch/main/graph/badge.svg)](https://codecov.io/gh/agrc/dolly-carton)
 
-Pull data from SGID Internal and push to AGOL
+Automated pipeline for syncing SGID data in internal to ArcGIS Online
 
-## Features
+## What it does
 
-### Geodatabase Domain Support
+1. Queries for updated tables in internal using [SGID.Meta.ChangeDetection](https://github.com/agrc/cambiador)
+2. Creates file geodatabases with updated tables
+3. Publishes/updates ArcGIS Online feature services
 
-Dolly Carton now supports extracting and creating Esri geodatabase domains when creating File Geodatabases (FGDBs):
+## Setup
 
-- **Coded Value Domains**: Extracts and recreates domains with code-value pairs
-- **Range Domains**: Extracts and recreates domains with min/max value constraints  
-- **Field Associations**: Automatically applies domain associations to the appropriate fields
-- **Type Conversion**: Handles conversion between Esri and OGR field types (String, Integer, Double, etc.)
+Open project in VS Code and select "Reopen in Container"
 
-The domain functionality integrates seamlessly with the existing FGDB creation workflow, automatically:
+### Configuration
 
-1. Extracting domain definitions from the source geodatabase
-2. Parsing XML domain definitions for both coded value and range types
-3. Creating equivalent domains in the output FGDB using GDAL's domain APIs
-4. Applying domain associations to fields that reference them
+Create `src/dolly/secrets/secrets.json` based on `src/dolly/secrets/secrets_template.json`
 
-This ensures that data validation rules and pick lists are preserved when data is exported from SGID Internal.
+## Usage
+
+```bash
+# Process all changed tables
+dolly
+
+# Process specific tables
+dolly --tables "sgid.society.cemeteries,sgid.boundaries.municipalities"
+
+# Clean up the AGOL items created by the `dolly` command in the dev environment (both local and the dev GCP project). This is useful for resetting your AGOL state between runs.
+dolly-cleanup-dev-agol
+```
 
 ## Development
 
-### Testing
+Development environment is pre-configured with VS Code dev containers.
+
 ```bash
-# Run tests with coverage
+# All dependencies are pre-installed in the dev container
+
+# Test
 python -m pytest
+
+# Format
+ruff format . --write
 ```
-
-Coverage reports are automatically generated and uploaded to [Codecov](https://codecov.io/gh/agrc/dolly-carton) on pull requests.
-
-## Commands
-
-### `dolly`
-
-Runs the main Dolly Carton process. Run `dolly --help` for more information.
-
-### `dolly-cleanup-dev-agol`
-
-Cleans up the AGOL items created by the `dolly` command in the dev environment (both local and the dev GCP project). This is useful for resetting your AGOL state between runs.
