@@ -52,9 +52,9 @@ def set_last_checked(timestamp: datetime) -> None:
     """
     Set the last checked timestamp.
     In production, this is stored in Firestore and will raise exceptions if it fails.
-    In dev, this is a no-op.
+    In local dev, this is a no-op. In staging, this makes a Firestore call.
     """
-    if APP_ENVIRONMENT == "prod" and firestore is not None:
+    if firestore is not None:
         db = firestore.Client()
         doc_ref = db.collection("dolly-carton").document("state")
         doc_ref.set({"last_checked": timestamp}, merge=True)
