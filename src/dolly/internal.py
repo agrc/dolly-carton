@@ -127,20 +127,6 @@ def _build_change_detection_query(last_checked: datetime) -> str:
     """
 
 
-def _build_agol_items_query() -> str:
-    """
-    Build SQL query for retrieving AGOL items lookup data.
-
-    Returns:
-        SQL query string
-    """
-
-    return """
-        SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
-        FROM SGID.META.AGOLItems
-    """
-
-
 def _build_update_agol_item_query(table: str, item_id: str) -> str:
     """
     Build SQL query for updating AGOL item ID.
@@ -212,7 +198,10 @@ def get_agol_items_lookup(
             "agol_items_lookup"
         ]
 
-    query = _build_agol_items_query()
+    query = """
+        SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
+        FROM SGID.META.AGOLItems
+    """
 
     # Use provided connection or create a new one
     if connection is None:
@@ -232,8 +221,8 @@ def get_agol_items_lookup(
                 continue
             lookup[row[0].lower()] = {
                 "item_id": row[1],
-                "geometry_type": row[2],
-                "published_name": row[3],
+                "published_name": row[2],
+                "geometry_type": row[3],
             }
 
         return lookup
