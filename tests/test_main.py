@@ -111,38 +111,34 @@ class TestMain:
             },
         }
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.set_last_checked")
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_no_updated_tables(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
         mock_set_last_checked,
         mock_precisedelta,
         mock_time,
-        mock_post_to_slack,
     ):
         """Test main function when no tables have been updated."""
         # Setup mocks
-        mock_time.side_effect = [
-            1000.0,
-            1005.0,
-            1005.1,
-            1005.2,
-        ]  # Additional calls for Slack integration
+        mock_time.side_effect = [1000.0, 1005.0]  # start and end times
         mock_last_checked = datetime(2023, 1, 1)
         mock_get_last_checked.return_value = mock_last_checked
         mock_get_updated_tables.return_value = []
         mock_precisedelta.return_value = "5 seconds"
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         _main_logic()
 
@@ -160,7 +156,6 @@ class TestMain:
         mock_logger.info.assert_any_call("Updated tables: []")
         mock_logger.info.assert_any_call("No updated tables found.")
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.set_last_checked")
@@ -172,10 +167,12 @@ class TestMain:
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_only_existing_services_to_update(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
@@ -187,21 +184,16 @@ class TestMain:
         mock_set_last_checked,
         mock_precisedelta,
         mock_time,
-        mock_post_to_slack,
     ):
         """Test main function with only existing services to update."""
         # Setup mocks
-        mock_time.side_effect = [
-            1000.0,
-            1010.0,
-            1010.1,
-            1010.2,
-        ]  # Additional calls for Slack integration
+        mock_time.side_effect = [1000.0, 1010.0]
         mock_last_checked = datetime(2023, 1, 1)
         mock_get_last_checked.return_value = mock_last_checked
         mock_get_updated_tables.return_value = ["sgid.society.cemeteries"]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         mock_fgdb_path = Path("/test/output/data.gdb")
         mock_create_fgdb.return_value = mock_fgdb_path
@@ -235,7 +227,6 @@ class TestMain:
         )
         mock_logger.info.assert_any_call("No new feature services to publish.")
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.set_last_checked")
@@ -245,10 +236,12 @@ class TestMain:
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_only_new_services_to_publish(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
@@ -258,21 +251,16 @@ class TestMain:
         mock_set_last_checked,
         mock_precisedelta,
         mock_time,
-        mock_post_to_slack,
     ):
         """Test main function with only new services to publish."""
         # Setup mocks
-        mock_time.side_effect = [
-            1000.0,
-            1015.0,
-            1015.1,
-            1015.2,
-        ]  # Additional calls for Slack integration
+        mock_time.side_effect = [1000.0, 1015.0]
         mock_last_checked = datetime(2023, 1, 1)
         mock_get_last_checked.return_value = mock_last_checked
         mock_get_updated_tables.return_value = ["sgid.transportation.roads"]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         mock_current_time = datetime(2023, 1, 2)
         mock_datetime.now.return_value = mock_current_time
@@ -294,7 +282,6 @@ class TestMain:
             "Updated tables: ['sgid.transportation.roads']"
         )
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.set_last_checked")
@@ -307,10 +294,12 @@ class TestMain:
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_both_existing_and_new_services(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
@@ -323,16 +312,10 @@ class TestMain:
         mock_set_last_checked,
         mock_precisedelta,
         mock_time,
-        mock_post_to_slack,
     ):
         """Test main function with both existing and new services."""
         # Setup mocks
-        mock_time.side_effect = [
-            1000.0,
-            1020.0,
-            1020.1,
-            1020.2,
-        ]  # Additional calls for Slack integration
+        mock_time.side_effect = [1000.0, 1020.0]
         mock_last_checked = datetime(2023, 1, 1)
         mock_get_last_checked.return_value = mock_last_checked
         mock_get_updated_tables.return_value = [
@@ -340,7 +323,8 @@ class TestMain:
             "sgid.transportation.roads",
         ]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         mock_fgdb_path = Path("/test/output/data.gdb")
         mock_create_fgdb.return_value = mock_fgdb_path
@@ -370,29 +354,25 @@ class TestMain:
         # Verify timestamp update
         mock_set_last_checked.assert_called_once_with(mock_current_time)
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.time.time")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_exception_handling(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_time,
-        mock_post_to_slack,
     ):
         """Test main function exception handling in finally block."""
         # Setup mocks
-        mock_time.side_effect = [
-            1000.0,
-            1005.0,
-            1005.1,
-            1005.2,
-        ]  # Additional calls for Slack integration
+        mock_time.side_effect = [1000.0, 1005.0]
         mock_get_last_checked.side_effect = Exception("Database error")
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         # Exception should propagate, but finally block should still execute
         with pytest.raises(Exception, match="Database error"):
@@ -404,7 +384,6 @@ class TestMain:
         # Verify finally block logging still executes
         mock_logger.info.assert_any_call("Starting Dolly Carton process...")
 
-    @patch("dolly.summary.ProcessSummary.post_to_slack")
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
     @patch("dolly.main.zip_and_upload_fgdb")
@@ -414,10 +393,12 @@ class TestMain:
     @patch("dolly.main.get_updated_tables")
     @patch("dolly.main.get_last_checked")
     @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_with_cli_tables_parameter(
         self,
         mock_logger,
+        mock_requests_post,
         mock_clean_up,
         mock_get_last_checked,
         mock_get_updated_tables,
@@ -427,12 +408,12 @@ class TestMain:
         mock_zip_and_upload_fgdb,
         mock_update_feature_services,
         mock_publish_new_feature_services,
-        mock_post_to_slack,
     ):
         """Test main function with CLI tables parameter overriding automatic detection."""
         # Setup mocks
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_post_to_slack.return_value = True
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         mock_fgdb_path = Path("/test/output/data.gdb")
         mock_create_fgdb.return_value = mock_fgdb_path
