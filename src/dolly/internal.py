@@ -25,8 +25,7 @@ from dolly.utils import (
 
 logger = logging.getLogger(__name__)
 
-# Get environment setting
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
 
 secrets = get_secrets()
 host = secrets.get("INTERNAL_HOST")
@@ -175,7 +174,7 @@ def get_updated_tables(
     Returns:
         List of table names that have been updated
     """
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         return json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))["updated_tables"]
 
     query = _build_change_detection_query(last_checked)
@@ -208,7 +207,7 @@ def get_agol_items_lookup(
     Returns:
         Dictionary mapping table names to AGOL item information
     """
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         return json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))[
             "agol_items_lookup"
         ]
@@ -258,7 +257,7 @@ def update_agol_item(
     """
     logger.info(f"Updating AGOL item ID for table {table} to {item_id}")
 
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         logger.info(
             f"DEV MODE: Would update AGOL item ID for table {table} to {item_id}"
         )

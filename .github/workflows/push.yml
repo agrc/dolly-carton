@@ -55,4 +55,4 @@ jobs:
           pause_schedule_job: "yes"
           github_token: ${{ secrets.GITHUB_TOKEN }}
           env_vars: |-
-            APP_ENVIRONMENT=dev
+            APP_ENVIRONMENT=staging

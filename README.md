@@ -44,3 +44,11 @@ python -m pytest
 # Format
 ruff format . --write
 ```
+
+## App Environments
+
+`APP_ENVIRONMENT` is an indicator of what environment the code is running in. This is set in the Dockerfile or Github Actions.
+
+- `dev`: Development environment (local)
+- `staging`: Staging environment (GCP)
+- `prod`: Production environment (GCP)

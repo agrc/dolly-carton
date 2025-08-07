@@ -474,19 +474,20 @@ class TestCleanupDevAgolItems:
             },
         }
 
-    @patch("dolly.main.os.getenv")
+    @patch("dolly.main.APP_ENVIRONMENT", "prod")
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.logger")
     def test_cleanup_dev_agol_items_not_in_dev_environment(
-        self, mock_logger, mock_precisedelta, mock_time, mock_getenv
+        self, mock_logger, mock_precisedelta, mock_time
     ):
         """Test cleanup function when not in dev environment."""
         mock_time.side_effect = [1000.0, 1005.0]
-        mock_getenv.return_value = "prod"
         mock_precisedelta.return_value = "5 seconds"
 
-        with pytest.raises(ValueError, match="Not in dev environment!"):
+        with pytest.raises(
+            ValueError, match="This command should only be run in dev environment!"
+        ):
             cleanup_dev_agol_items()
 
         # Verify finally block still executes

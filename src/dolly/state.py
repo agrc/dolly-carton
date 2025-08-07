@@ -4,15 +4,14 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-# Conditional import for Firestore (only needed in production)
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+
+# Conditional import for Firestore (only needed in gcp)
 firestore = None
-if os.getenv("APP_ENVIRONMENT") == "prod":
+if APP_ENVIRONMENT == "prod" or APP_ENVIRONMENT == "staging":
     from google.cloud import firestore
 
 logger = logging.getLogger(__name__)
-
-# Get environment setting
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
 
 
 def get_last_checked() -> datetime:
@@ -44,7 +43,6 @@ def get_last_checked() -> datetime:
         )
     else:
         # In dev environment, return yesterday
-
         return datetime.now() - timedelta(days=1)
 
 
@@ -59,7 +57,9 @@ def set_last_checked(timestamp: datetime) -> None:
         doc_ref = db.collection("dolly-carton").document("state")
         doc_ref.set({"last_checked": timestamp}, merge=True)
         logger.info(f"Updated last_checked in Firestore to {timestamp}")
-    elif APP_ENVIRONMENT == "prod" and firestore is None:
+    elif (
+        APP_ENVIRONMENT == "prod" or APP_ENVIRONMENT == "staging" and firestore is None
+    ):
         raise ImportError(
             "Firestore is required in production but google-cloud-firestore is not available"
         )

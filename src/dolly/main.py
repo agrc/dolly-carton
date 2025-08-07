@@ -25,8 +25,7 @@ logger = logging.getLogger(__name__)
 #: throw exceptions on errors rather than returning None
 gdal.UseExceptions()
 
-# Get environment setting
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
 
 
 def clean_up() -> None:
@@ -161,9 +160,8 @@ def cleanup_dev_agol_items() -> None:
     logger.info("Starting cleanup of dev feature services...")
 
     try:
-        APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
         if APP_ENVIRONMENT != "dev":
-            raise ValueError("Not in dev environment!")
+            raise ValueError("This command should only be run in dev environment!")
 
         secrets = get_secrets()
         gis = GIS(
