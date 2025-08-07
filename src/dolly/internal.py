@@ -144,7 +144,7 @@ def _build_update_agol_item_query(table: str, item_id: str) -> str:
     return f"""
         UPDATE SGID.META.AGOLItems
         SET AGOL_ITEM_ID = '{item_id}'
-        WHERE TABLENAME = '{table}'
+        WHERE UPPER(TABLENAME) = UPPER('{table}')
     """
 
 
