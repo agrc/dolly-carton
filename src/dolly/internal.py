@@ -106,8 +106,10 @@ def _get_geometry_option(geometry_type: str) -> str:
         return "MULTILINESTRING"
     elif geometry_type == "STAND ALONE":
         return "NONE"
+    elif geometry_type == "POINT":
+        return "POINT"
     else:
-        return geometry_type
+        raise ValueError(f"Unknown geometry type: {geometry_type}")
 
 
 def _build_change_detection_query(last_checked: datetime) -> str:
