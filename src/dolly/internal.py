@@ -304,6 +304,8 @@ def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
             get_service_from_title(title),
             "-nlt",
             geometry_option,
+            "-a_srs",
+            "EPSG:26912",
         ],
         "accessMode": "append",
     }
