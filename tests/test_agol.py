@@ -43,7 +43,7 @@ class TestGenerateUploadTitle:
         expected = "dolly-carton Temporary upload: transportation_roads (Test)"
         assert result == expected
 
-    @patch("dolly.agol.APP_ENVIRONMENT", "staging")
+    @patch("dolly.agol.APP_ENVIRONMENT", "other")
     def test_other_environment_title(self):
         """Test title generation in other environments (treated as prod)."""
         fgdb_stem = "boundaries_counties"
@@ -85,7 +85,7 @@ class TestGenerateUploadTags:
         expected = "Temp,Test"
         assert result == expected
 
-    @patch("dolly.agol.APP_ENVIRONMENT", "staging")
+    @patch("dolly.agol.APP_ENVIRONMENT", "other")
     def test_other_environment_tags(self):
         """Test tags generation in other environments (treated as prod)."""
         result = _generate_upload_tags()
@@ -168,7 +168,7 @@ class TestGenerateServiceTitle:
         expected = "Utah Roads (Test)"
         assert result == expected
 
-    @patch("dolly.agol.APP_ENVIRONMENT", "staging")
+    @patch("dolly.agol.APP_ENVIRONMENT", "other")
     def test_other_environment_title(self):
         """Test service title generation in other environments (treated as prod)."""
         published_name = "Utah Counties"

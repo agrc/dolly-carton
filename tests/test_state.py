@@ -247,7 +247,7 @@ class TestSetLastChecked:
         """Test that non-prod environments (other than dev) also log the timestamp."""
         test_timestamp = datetime(2025, 7, 25, 14, 30, 0)
 
-        with patch("dolly.state.APP_ENVIRONMENT", "staging"):
+        with patch("dolly.state.APP_ENVIRONMENT", "dev"):
             set_last_checked(test_timestamp)
 
             mock_logger.info.assert_called_once_with(

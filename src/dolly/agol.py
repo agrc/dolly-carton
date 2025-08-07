@@ -13,8 +13,7 @@ from dolly.utils import get_secrets, get_service_from_title, retry
 
 logger = logging.getLogger(__name__)
 
-# Get environment setting
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
 
 
 def _generate_upload_title(fgdb_stem: str) -> str:
@@ -28,7 +27,7 @@ def _generate_upload_title(fgdb_stem: str) -> str:
         Formatted title string for AGOL upload
     """
     title = f"dolly-carton Temporary upload: {fgdb_stem}"
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         title += " (Test)"
 
     return title
@@ -42,7 +41,7 @@ def _generate_upload_tags() -> str:
         Comma-separated tags string
     """
     tags = "Temp"
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         tags += ",Test"
 
     return tags
@@ -60,7 +59,7 @@ def _generate_service_tags(table: str) -> str:
     """
     category = table.split(".")[1].title()
     tags = f"UGRC,SGID,{category}"
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         tags += ",Test"
 
     return tags
@@ -77,7 +76,7 @@ def _generate_service_title(published_name: str) -> str:
         Formatted title string
     """
     title = published_name
-    if APP_ENVIRONMENT == "dev":
+    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
         title += " (Test)"
 
     return title
