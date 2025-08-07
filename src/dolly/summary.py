@@ -1,14 +1,14 @@
 """Summary reporting functionality for Dolly Carton process tracking."""
 
 import logging
-import socket
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import List
-from dolly.utils import get_secrets
 
 import humanize
 import requests
+
+from dolly.utils import get_secrets
 
 logger = logging.getLogger(__name__)
 
@@ -35,10 +35,6 @@ class ProcessSummary:
     # Timing
     start_time: float = 0.0
     end_time: float = 0.0
-
-    # Mode information
-    cli_tables_provided: bool = False
-    change_detection_used: bool = False
 
     def add_table_updated(self, table: str) -> None:
         """Add a table that was successfully updated."""
@@ -75,14 +71,6 @@ class ProcessSummary:
         logger.info("=" * 80)
         logger.info("DOLLY CARTON PROCESS SUMMARY")
         logger.info("=" * 80)
-
-        # Mode information
-        if self.cli_tables_provided:
-            logger.info("📋 Mode: CLI-provided tables")
-        elif self.change_detection_used:
-            logger.info("🔍 Mode: Automatic change detection")
-        else:
-            logger.info("❓ Mode: Unknown")
 
         # Success metrics
         total_tables = len(set(self.tables_updated + self.tables_published))
@@ -153,19 +141,21 @@ class ProcessSummary:
             status_emoji = "🔵"
             status_text = "completed - no tables required processing"
 
-        # Mode information
-        if self.cli_tables_provided:
-            mode_text = "📋 CLI-provided tables"
-        elif self.change_detection_used:
-            mode_text = "🔍 Automatic change detection"
-        else:
-            mode_text = "❓ Unknown mode"
-
         elapsed_time = self.get_total_elapsed_time()
 
-        # Get current date and machine name
         current_date = datetime.now().strftime("%B %d, %Y")
-        machine_name = socket.gethostname()
+        host = "local dev"
+        is_running_in_gcp = False
+        try:
+            response = requests.get(
+                "http://metadata.google.internal/computeMetadata/v1/project/project-id",
+                headers={"Metadata-Flavor": "Google"},
+                timeout=5,
+            )
+            host = response.text
+            is_running_in_gcp = True
+        except Exception:
+            pass
 
         blocks = []
 
@@ -198,8 +188,7 @@ class ProcessSummary:
                 "type": "section",
                 "fields": [
                     {"type": "mrkdwn", "text": f"📅 *Date:*\n{current_date}"},
-                    {"type": "mrkdwn", "text": f"🖥️ *Machine:*\n`{machine_name}`"},
-                    {"type": "mrkdwn", "text": f"⚙️ *Mode:*\n{mode_text}"},
+                    {"type": "mrkdwn", "text": f"🖥️ *Host:*\n`{host}`"},
                     {
                         "type": "mrkdwn",
                         "text": f"⏱️ *Duration:*\n{humanize.precisedelta(elapsed_time)}",
@@ -289,6 +278,39 @@ class ProcessSummary:
                         },
                     }
                 )
+
+        if is_running_in_gcp:
+            # Create GCP logs link with time range based on actual process execution time
+            # Add 1 hour buffer to start and end times
+            buffer_seconds = 900  # 15 minutes
+            log_start_time = self.start_time - buffer_seconds
+            log_end_time = (
+                self.end_time if self.end_time > 0 else datetime.now().timestamp()
+            ) + buffer_seconds
+
+            # Convert to ISO format for GCP logs URL
+            log_start_datetime = (
+                datetime.fromtimestamp(log_start_time).isoformat() + "Z"
+            )
+            log_end_datetime = datetime.fromtimestamp(log_end_time).isoformat() + "Z"
+
+            blocks.append(
+                {
+                    "type": "rich_text",
+                    "elements": [
+                        {
+                            "type": "rich_text_section",
+                            "elements": [
+                                {
+                                    "type": "link",
+                                    "text": "GCP Logs",
+                                    "url": f"https://console.cloud.google.com/logs/query;query=resource.type%20%3D%20%22cloud_run_job%22%20resource.labels.job_name%20%3D%20%22dolly-nightly%22%20resource.labels.location%20%3D%20%22us-west3%22%20severity%3E%3DDEFAULT;storageScope=project;timeRange={log_start_datetime}%2F{log_end_datetime}?authuser=0&inv=1&invt=Ab43MA&project={host}",
+                                }
+                            ],
+                        }
+                    ],
+                }
+            )
 
         return {"blocks": blocks}
 
@@ -383,25 +405,18 @@ class ProcessSummary:
 _current_summary: ProcessSummary | None = None
 
 
-def start_summary(
-    start_time: float, cli_tables_provided: bool = False
-) -> ProcessSummary:
+def start_summary(start_time: float) -> ProcessSummary:
     """
     Initialize a new process summary.
 
     Args:
         start_time: Process start time (from time.time())
-        cli_tables_provided: Whether tables were provided via CLI
 
     Returns:
         ProcessSummary instance for tracking
     """
     global _current_summary
-    _current_summary = ProcessSummary(
-        start_time=start_time,
-        cli_tables_provided=cli_tables_provided,
-        change_detection_used=not cli_tables_provided,
-    )
+    _current_summary = ProcessSummary(start_time=start_time)
 
     return _current_summary
 

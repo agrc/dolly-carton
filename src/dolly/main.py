@@ -66,7 +66,7 @@ def _main_logic(tables: Optional[str] = None) -> None:
     """
     logger.info("Starting Dolly Carton process...")
 
-    start_summary(time.time(), cli_tables_provided=bool(tables))
+    start_summary(time.time())
 
     try:
         clean_up()

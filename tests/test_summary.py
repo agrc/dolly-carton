@@ -28,8 +28,6 @@ class TestProcessSummary:
         assert summary.publish_errors == []
         assert summary.start_time == 0.0
         assert summary.end_time == 0.0
-        assert not summary.cli_tables_provided
-        assert not summary.change_detection_used
 
     def test_add_table_updated(self):
         """Test adding updated tables."""
@@ -96,7 +94,6 @@ class TestProcessSummary:
         summary = ProcessSummary()
         summary.start_time = 1000.0
         summary.end_time = 1015.0
-        summary.cli_tables_provided = True
         summary.add_table_updated("sgid.test.table1")
         summary.add_table_published("sgid.test.table2")
 
@@ -105,7 +102,6 @@ class TestProcessSummary:
         # Check that info was called with expected messages
         mock_logger.info.assert_any_call("=" * 80)
         mock_logger.info.assert_any_call("DOLLY CARTON PROCESS SUMMARY")
-        mock_logger.info.assert_any_call("📋 Mode: CLI-provided tables")
         mock_logger.info.assert_any_call("📊 Total tables processed: 2")
         mock_logger.info.assert_any_call("✅ Tables updated: 1")
         mock_logger.info.assert_any_call("   • sgid.test.table1")
@@ -121,13 +117,11 @@ class TestProcessSummary:
         summary = ProcessSummary()
         summary.start_time = 1000.0
         summary.end_time = 1010.0
-        summary.change_detection_used = True
         summary.add_table_error("sgid.test.table1", "update", "Connection failed")
         summary.add_table_error("sgid.test.table2", "publish", "Permission denied")
 
         summary.log_summary()
 
-        mock_logger.info.assert_any_call("🔍 Mode: Automatic change detection")
         mock_logger.info.assert_any_call("❌ Tables with errors: 2")
         mock_logger.info.assert_any_call("   • sgid.test.table1")
         mock_logger.info.assert_any_call("   • sgid.test.table2")
@@ -160,34 +154,23 @@ class TestSummaryGlobalFunctions:
         """Test starting and getting current summary."""
         start_time = time.time()
 
-        summary = start_summary(start_time, cli_tables_provided=True)
+        summary = start_summary(start_time)
 
         assert summary.start_time == start_time
-        assert summary.cli_tables_provided
-        assert not summary.change_detection_used
 
         # Test getting current summary
         current = get_current_summary()
         assert current is summary
 
-    def test_start_summary_change_detection(self):
-        """Test starting summary for change detection mode."""
-        start_time = time.time()
-
-        summary = start_summary(start_time, cli_tables_provided=False)
-
-        assert not summary.cli_tables_provided
-        assert summary.change_detection_used
-
-    @patch("dolly.summary.get_secrets")
+    @patch("dolly.summary.requests.post")
     @patch("dolly.summary.logger")
-    def test_finish_summary(self, mock_logger, mock_get_secrets):
+    def test_finish_summary(self, mock_logger, mock_requests_post):
         """Test finishing summary."""
         start_time = time.time()
         end_time = start_time + 10
 
-        # Mock secrets to prevent Slack posting
-        mock_get_secrets.return_value = {}
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
 
         # Start a summary
         summary = start_summary(start_time)
@@ -211,11 +194,10 @@ class TestSummaryGlobalFunctions:
         assert current is None
 
 
-@patch("dolly.summary.requests.post")
 class TestSlackIntegration:
     """Test cases for Slack integration functionality."""
 
-    def test_format_slack_message_success(self, mock_post):
+    def test_format_slack_message_success(self):
         """Test formatting a successful process summary as Slack message."""
         summary = ProcessSummary()
         summary.start_time = 100.0
@@ -226,17 +208,14 @@ class TestSlackIntegration:
         message = summary.format_slack_message()
 
         assert "blocks" in message
-        assert (
-            len(message["blocks"]) >= 5
-        )  # Header, status, context, metrics, divider + tables
+        assert len(message["blocks"]) > 0
 
-        # Check that the message contains key elements
-        message_text = str(message)
-        assert "🟢" in message_text  # Success emoji
-        assert "Process completed successfully" in message_text
-        assert "sgid.test.table1" in message_text
+        # Convert message to string for easier testing
+        message_str = str(message)
+        assert "🟢 *Status:* Process completed successfully" in message_str
+        assert "sgid.test.table1" in message_str
 
-    def test_format_slack_message_with_errors(self, mock_post):
+    def test_format_slack_message_with_errors(self):
         """Test formatting a process summary with errors as Slack message."""
         summary = ProcessSummary()
         summary.start_time = 100.0
@@ -245,20 +224,12 @@ class TestSlackIntegration:
 
         message = summary.format_slack_message()
 
-        assert "blocks" in message
-        blocks = message["blocks"]
-        assert (
-            len(blocks) >= 5
-        )  # Header, status, context, metrics, divider + error sections
+        # Convert message to string for easier testing
+        message_str = str(message)
+        assert "🟡 *Status:* Process completed with errors" in message_str
+        assert "sgid.test.table1" in message_str
 
-        # Check that the message contains key elements
-        message_text = str(message)
-        assert "🟡" in message_text  # Warning emoji
-        assert "Process completed with errors" in message_text
-        assert "sgid.test.table1" in message_text
-        assert "Connection failed" in message_text
-
-    def test_format_slack_message_no_tables(self, mock_post):
+    def test_format_slack_message_no_tables(self):
         """Test formatting a summary with no tables processed."""
         summary = ProcessSummary()
         summary.start_time = 100.0
@@ -266,17 +237,14 @@ class TestSlackIntegration:
 
         message = summary.format_slack_message()
 
-        assert "blocks" in message
-        blocks = message["blocks"]
+        # Convert message to string for easier testing
+        message_str = str(message)
         assert (
-            len(blocks) >= 4
-        )  # Header, status, context, metrics (no divider since no tables)
+            "🔵 *Status:* Process completed - no tables required processing"
+            in message_str
+        )
 
-        # Check that the message contains key elements
-        message_text = str(message)
-        assert "🔵" in message_text  # Blue emoji
-        assert "Process completed - no tables required processing" in message_text
-
+    @patch("dolly.summary.requests.post")
     def test_post_to_slack_success(self, mock_post):
         """Test successful posting to Slack."""
         mock_response = MagicMock()
@@ -289,6 +257,7 @@ class TestSlackIntegration:
         assert result is True
         mock_post.assert_called_once()
 
+    @patch("dolly.summary.requests.post")
     def test_post_to_slack_failure(self, mock_post):
         """Test failed posting to Slack."""
         mock_response = MagicMock()
@@ -301,6 +270,7 @@ class TestSlackIntegration:
 
         assert result is False
 
+    @patch("dolly.summary.requests.post")
     def test_post_to_slack_request_exception(self, mock_post):
         """Test Slack posting with request exception."""
         mock_post.side_effect = requests.exceptions.RequestException("Network error")
@@ -311,38 +281,35 @@ class TestSlackIntegration:
         assert result is False
 
     @patch("dolly.summary.get_secrets")
-    def test_finish_summary_with_slack(self, mock_get_secrets, mock_post):
+    def test_finish_summary_with_slack(self, mock_get_secrets):
         """Test finish_summary posts to Slack when webhook URL is available."""
-        # Mock successful HTTP response
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_post.return_value = mock_response
-
         # Start a summary so we have a current one
         start_time = time.time()
         summary = start_summary(start_time)
 
-        # Mock secrets with Slack webhook
-        mock_get_secrets.return_value = {
-            "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test"
-        }
+        # Mock the post_to_slack method
+        with patch.object(summary, "post_to_slack", return_value=True) as mock_post:
+            # Mock secrets with Slack webhook
+            mock_get_secrets.return_value = {
+                "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test"
+            }
 
-        finish_summary(start_time + 10)
+            finish_summary(start_time + 10)
 
-        # Verify that requests.post was called (meaning Slack posting was attempted)
-        mock_post.assert_called_once()
+            mock_post.assert_called_once_with("https://hooks.slack.com/test")
 
     @patch("dolly.summary.get_secrets")
-    def test_finish_summary_no_slack_webhook(self, mock_get_secrets, mock_post):
+    def test_finish_summary_no_slack_webhook(self, mock_get_secrets):
         """Test finish_summary when no Slack webhook URL is configured."""
         # Start a summary so we have a current one
         start_time = time.time()
         summary = start_summary(start_time)
 
-        # Mock secrets without Slack webhook
-        mock_get_secrets.return_value = {}
+        # Mock the post_to_slack method
+        with patch.object(summary, "post_to_slack") as mock_post:
+            # Mock secrets without Slack webhook
+            mock_get_secrets.return_value = {}
 
-        finish_summary(start_time + 10)
+            finish_summary(start_time + 10)
 
-        # Verify that requests.post was NOT called (no Slack posting attempted)
-        mock_post.assert_not_called()
+            mock_post.assert_not_called()
