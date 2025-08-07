@@ -7,7 +7,6 @@ from unittest.mock import Mock, patch
 import pytest
 
 from dolly.internal import (
-    _build_agol_items_query,
     _build_change_detection_query,
     _build_update_agol_item_query,
     _copy_table_to_fgdb,
@@ -105,26 +104,13 @@ class TestGetGeometryOption:
 
     def test_unknown_geometry_type_passthrough(self):
         """Test that unknown geometry types pass through unchanged."""
-        result = _get_geometry_option("CUSTOM_GEOMETRY")
-        assert result == "CUSTOM_GEOMETRY"
-
-    def test_case_sensitivity(self):
-        """Test that geometry type matching is case sensitive."""
-        result = _get_geometry_option("polygon")  # lowercase
-        assert result == "polygon"  # should pass through unchanged
-
-        result = _get_geometry_option("Polygon")  # mixed case
-        assert result == "Polygon"  # should pass through unchanged
+        with pytest.raises(ValueError, match="Unknown geometry type: CUSTOM_GEOMETRY"):
+            _get_geometry_option("CUSTOM_GEOMETRY")
 
     def test_empty_string_geometry_type(self):
         """Test handling of empty string geometry type."""
-        result = _get_geometry_option("")
-        assert result == ""
-
-    def test_none_like_string_geometry_type(self):
-        """Test handling of 'None' string (not None object)."""
-        result = _get_geometry_option("None")
-        assert result == "None"
+        with pytest.raises(ValueError, match="Unknown geometry type: "):
+            _get_geometry_option("")
 
 
 class TestBuildChangeDetectionQuery:
@@ -162,36 +148,6 @@ class TestBuildChangeDetectionQuery:
         assert "FROM SGID.META.ChangeDetection" in result
         assert "WHERE last_modified >" in result
         assert "2025-07-25 12:00:00" in result
-
-
-class TestBuildAgolItemsQuery:
-    """Test cases for the _build_agol_items_query function."""
-
-    def test_query_structure(self):
-        """Test that query has correct structure."""
-        result = _build_agol_items_query()
-
-        expected_query = """
-        SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
-        FROM SGID.META.AGOLItems
-    """
-        assert result.strip() == expected_query.strip()
-
-    def test_query_selects_all_required_columns(self):
-        """Test that query selects all required columns."""
-        result = _build_agol_items_query()
-
-        # Check that all required columns are selected
-        assert "TABLENAME" in result
-        assert "AGOL_ITEM_ID" in result
-        assert "AGOL_PUBLISHED_NAME" in result
-        assert "GEOMETRY_TYPE" in result
-
-    def test_query_targets_correct_table(self):
-        """Test that query targets the correct table."""
-        result = _build_agol_items_query()
-
-        assert "FROM SGID.META.AGOLItems" in result
 
 
 class TestGetUpdatedTables:
@@ -285,16 +241,10 @@ class TestGetAgolItemsLookup:
         mock_path.read_text.assert_called_once_with(encoding="utf-8")
 
     @patch("dolly.internal.APP_ENVIRONMENT", "prod")
-    @patch("dolly.internal._build_agol_items_query")
     @patch("dolly.internal.is_guid")
-    def test_production_environment_filters_invalid_guids(
-        self, mock_is_guid, mock_query_builder
-    ):
+    def test_production_environment_filters_invalid_guids(self, mock_is_guid):
         """Test that production environment filters out invalid GUIDs."""
         # Setup mocks
-        mock_query_builder.return_value = (
-            "SELECT TABLENAME, AGOL_ITEM_ID FROM AGOLItems"
-        )
         mock_is_guid.side_effect = lambda x: x == "valid-guid-123"
 
         mock_connection = Mock()
@@ -319,14 +269,12 @@ class TestGetAgolItemsLookup:
 
     @patch("dolly.internal.APP_ENVIRONMENT", "prod")
     @patch("dolly.internal._get_database_connection")
-    @patch("dolly.internal._build_agol_items_query")
     @patch("dolly.internal.is_guid")
     def test_creates_connection_when_none_provided(
-        self, mock_is_guid, mock_query_builder, mock_get_connection
+        self, mock_is_guid, mock_get_connection
     ):
         """Test that function creates connection when none provided."""
         # Setup mocks
-        mock_query_builder.return_value = "SELECT TABLENAME FROM AGOLItems"
         mock_is_guid.return_value = True
         mock_connection = Mock()
         mock_cursor = Mock()
@@ -343,12 +291,10 @@ class TestGetAgolItemsLookup:
         mock_connection.close.assert_called_once()
 
     @patch("dolly.internal.APP_ENVIRONMENT", "prod")
-    @patch("dolly.internal._build_agol_items_query")
     @patch("dolly.internal.is_guid")
-    def test_closes_provided_connection(self, mock_is_guid, mock_query_builder):
+    def test_closes_provided_connection(self, mock_is_guid):
         """Test that function closes provided connection."""
         # Setup mocks
-        mock_query_builder.return_value = "SELECT TABLENAME FROM AGOLItems"
         mock_is_guid.return_value = True
         mock_connection = Mock()
         mock_cursor = Mock()
