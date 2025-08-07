@@ -16,7 +16,7 @@ Open project in VS Code and select "Reopen in Container"
 
 ### Configuration
 
-Create `src/dolly/secrets/secrets.json` based on `src/dolly/secrets/secrets_template.json`
+Create `src/dolly/secrets/secrets.dev.json` based on `src/dolly/secrets/secrets_template.json`
 
 ## Usage
 
@@ -29,6 +29,14 @@ dolly --tables "sgid.society.cemeteries,sgid.boundaries.municipalities"
 
 # Clean up the AGOL items created by the `dolly` command in the dev environment (both local and the dev GCP project). This is useful for resetting your AGOL state between runs.
 dolly-cleanup-dev-agol
+```
+
+### Manually running production environment locally
+
+Assuming that you have a `secrets.prod.json` file.
+
+```bash
+APP_ENVIRONMENT=prod dolly --tables sgid.environment.deqmap_lust,sgid.environment.tankpst,sgid.environment.uicfacility
 ```
 
 ## Development

@@ -650,7 +650,7 @@ class TestBuildUpdateAgolItemQuery:
         expected_query = """
         UPDATE SGID.META.AGOLItems
         SET AGOL_ITEM_ID = 'abc123-def456-ghi789'
-        WHERE TABLENAME = 'sgid.test.table1'
+        WHERE UPPER(TABLENAME) = UPPER('sgid.test.table1')
     """
         assert result.strip() == expected_query.strip()
 
@@ -664,7 +664,7 @@ class TestBuildUpdateAgolItemQuery:
         # Check for required SQL components
         assert "UPDATE SGID.META.AGOLItems" in result
         assert "SET AGOL_ITEM_ID =" in result
-        assert "WHERE TABLENAME =" in result
+        assert "WHERE UPPER(TABLENAME) =" in result
         assert f"'{table}'" in result
         assert f"'{item_id}'" in result
 

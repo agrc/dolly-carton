@@ -14,6 +14,7 @@ RETRY_DELAY_TIME = 2
 
 OUTPUT_PATH = Path("output")
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
+APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
 
 
 #: copied from palletjack
@@ -82,7 +83,9 @@ def get_secrets():
         return json.loads(cloud_secrets_file.read_text(encoding="utf-8"))
 
     #: Otherwise, try to load a local copy for local development
-    local_secrets_file = Path(__file__).parent / "secrets" / "secrets.json"
+    local_secrets_file = (
+        Path(__file__).parent / "secrets" / f"secrets.{APP_ENVIRONMENT}.json"
+    )
     if local_secrets_file.exists():
         return json.loads(local_secrets_file.read_text(encoding="utf-8"))
 
