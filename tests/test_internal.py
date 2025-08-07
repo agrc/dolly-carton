@@ -544,7 +544,14 @@ class TestPrepareGdalOptions:
         expected = {
             "layers": ["test_layer"],
             "format": "OpenFileGDB",
-            "options": ["-nln", "test_service", "-nlt", "MULTIPOLYGON"],
+            "options": [
+                "-nln",
+                "test_service",
+                "-nlt",
+                "MULTIPOLYGON",
+                "-a_srs",
+                "EPSG:26912",
+            ],
             "accessMode": "append",
         }
 
