@@ -291,11 +291,11 @@ def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
         "layers": [layer_name],
         "format": "OpenFileGDB",
         "options": [
-            "-nln",
+            "-nln", #: new layer name
             get_service_from_title(title),
-            "-nlt",
+            "-nlt", #: new layer type
             geometry_option,
-            "-a_srs",
+            "-a_srs", #: assign spatial reference system
             "EPSG:26912",
         ],
         "accessMode": "append",
