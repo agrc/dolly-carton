@@ -31,6 +31,7 @@ class ProcessSummary:
     # Error details
     update_errors: List[str] = field(default_factory=list)
     publish_errors: List[str] = field(default_factory=list)
+    global_errors: List[str] = field(default_factory=list)
 
     # Timing
     start_time: float = 0.0
@@ -56,6 +57,10 @@ class ProcessSummary:
             self.update_errors.append(error_detail)
         elif error_type == "publish":
             self.publish_errors.append(error_detail)
+
+    def add_global_error(self, error_message: str) -> None:
+        """Add a global error that prevented normal process completion."""
+        self.global_errors.append(error_message)
 
     def get_total_elapsed_time(self) -> timedelta:
         """Get the total elapsed time as a timedelta object."""
@@ -91,29 +96,38 @@ class ProcessSummary:
             logger.info("🚀 Tables published: 0")
 
         # Error reporting
-        if self.tables_with_errors:
-            logger.info(f"❌ Tables with errors: {len(self.tables_with_errors)}")
-            for table in self.tables_with_errors:
-                logger.info(f"   • {table}")
+        if self.tables_with_errors or self.global_errors:
+            if self.tables_with_errors:
+                logger.info(f"❌ Tables with errors: {len(self.tables_with_errors)}")
+                for table in self.tables_with_errors:
+                    logger.info(f"   • {table}")
 
-            if self.update_errors:
-                logger.info("📝 Update errors:")
-                for error in self.update_errors:
-                    logger.info(f"   • {error}")
+                if self.update_errors:
+                    logger.info("📝 Update errors:")
+                    for error in self.update_errors:
+                        logger.info(f"   • {error}")
 
-            if self.publish_errors:
-                logger.info("📝 Publish errors:")
-                for error in self.publish_errors:
+                if self.publish_errors:
+                    logger.info("📝 Publish errors:")
+                    for error in self.publish_errors:
+                        logger.info(f"   • {error}")
+
+            if self.global_errors:
+                logger.info(f"🚨 Global errors: {len(self.global_errors)}")
+                for error in self.global_errors:
                     logger.info(f"   • {error}")
         else:
             logger.info("❌ Tables with errors: 0")
+            logger.info("🚨 Global errors: 0")
 
         # Timing information
         elapsed_time = self.get_total_elapsed_time()
         logger.info(f"⏱️  Total elapsed time: {humanize.precisedelta(elapsed_time)}")
 
         # Overall status
-        if self.tables_with_errors:
+        if self.global_errors:
+            logger.info("🔴 Process failed due to global errors")
+        elif self.tables_with_errors:
             logger.info("🟡 Process completed with errors")
         elif total_tables > 0:
             logger.info("🟢 Process completed successfully")
@@ -202,7 +216,10 @@ class ProcessSummary:
         """
         # Determine overall status and emoji
         total_tables = len(set(self.tables_updated + self.tables_published))
-        if self.tables_with_errors:
+        if self.global_errors:
+            status_emoji = "🔴"
+            status_text = "failed due to global errors"
+        elif self.tables_with_errors:
             status_emoji = "🟡"
             status_text = "completed with errors"
         elif total_tables > 0:
@@ -274,13 +291,18 @@ class ProcessSummary:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*📊 Processing Summary*\n• Tables processed: *{total_tables}*\n• Updated: *{len(self.tables_updated)}*\n• Published: *{len(self.tables_published)}*\n• Errors: *{len(self.tables_with_errors)}*",
+                    "text": f"*📊 Processing Summary*\n• Tables processed: *{total_tables}*\n• Updated: *{len(self.tables_updated)}*\n• Published: *{len(self.tables_published)}*\n• Table errors: *{len(self.tables_with_errors)}*\n• Global errors: *{len(self.global_errors)}*",
                 },
             }
         )
 
         # Add divider before detailed sections
-        if self.tables_updated or self.tables_published or self.tables_with_errors:
+        if (
+            self.tables_updated
+            or self.tables_published
+            or self.tables_with_errors
+            or self.global_errors
+        ):
             blocks.append({"type": "divider"})
 
         # Updated tables section
@@ -317,6 +339,13 @@ class ProcessSummary:
                     "*📤 Publish Error Details:*", self.publish_errors, prefix="•"
                 )
                 blocks.extend(publish_error_blocks)
+
+        # Global errors section
+        if self.global_errors:
+            global_error_blocks = self._create_text_blocks_with_limit(
+                "🚨 *Global Errors (Process Failed):*", self.global_errors, prefix="•"
+            )
+            blocks.extend(global_error_blocks)
 
         if is_running_in_gcp:
             # Create GCP logs link with time range based on actual process execution time

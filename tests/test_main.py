@@ -367,7 +367,7 @@ class TestMain:
         mock_get_last_checked,
         mock_time,
     ):
-        """Test main function exception handling in finally block."""
+        """Test main function exception handling records global error in summary."""
         # Setup mocks
         mock_time.side_effect = [1000.0, 1005.0]
         mock_get_last_checked.side_effect = Exception("Database error")
@@ -383,6 +383,48 @@ class TestMain:
 
         # Verify finally block logging still executes
         mock_logger.info.assert_any_call("Starting Dolly Carton process...")
+
+        # Verify that the global error was logged
+        mock_logger.error.assert_called_once()
+        error_call_args = mock_logger.error.call_args[0][0]
+        assert "Global error occurred" in error_call_args
+        assert "Exception: Database error" in error_call_args
+
+    @patch("dolly.main.time.time")
+    @patch("dolly.main.get_last_checked")
+    @patch("dolly.main.clean_up")
+    @patch("dolly.summary.get_current_summary")
+    @patch("dolly.summary.requests.post")
+    @patch("dolly.main.logger")
+    def test_main_global_error_recorded_in_summary(
+        self,
+        mock_logger,
+        mock_requests_post,
+        mock_get_current_summary,
+        mock_clean_up,
+        mock_get_last_checked,
+        mock_time,
+    ):
+        """Test that global errors are recorded in the summary."""
+        from dolly.summary import ProcessSummary
+
+        # Setup mocks
+        mock_time.side_effect = [1000.0, 1005.0]
+        mock_get_last_checked.side_effect = ValueError("Invalid configuration")
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
+
+        # Create a real summary object to test
+        test_summary = ProcessSummary()
+        mock_get_current_summary.return_value = test_summary
+
+        # Exception should propagate
+        with pytest.raises(ValueError, match="Invalid configuration"):
+            _main_logic()
+
+        # Verify the global error was recorded in the summary
+        assert len(test_summary.global_errors) == 1
+        assert "ValueError: Invalid configuration" in test_summary.global_errors[0]
 
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
