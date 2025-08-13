@@ -26,6 +26,7 @@ class TestProcessSummary:
         assert summary.tables_with_errors == []
         assert summary.update_errors == []
         assert summary.publish_errors == []
+        assert summary.global_errors == []
         assert summary.start_time == 0.0
         assert summary.end_time == 0.0
 
@@ -74,6 +75,18 @@ class TestProcessSummary:
             "sgid.test.table1: Another error",
         ]
 
+    def test_add_global_error(self):
+        """Test adding global errors."""
+        summary = ProcessSummary()
+
+        summary.add_global_error("ValueError: Invalid configuration")
+        summary.add_global_error("ConnectionError: Database unavailable")
+
+        assert summary.global_errors == [
+            "ValueError: Invalid configuration",
+            "ConnectionError: Database unavailable",
+        ]
+
     def test_get_total_elapsed_time(self):
         """Test elapsed time calculation."""
         summary = ProcessSummary()
@@ -108,6 +121,7 @@ class TestProcessSummary:
         mock_logger.info.assert_any_call("🚀 Tables published: 1")
         mock_logger.info.assert_any_call("   • sgid.test.table2")
         mock_logger.info.assert_any_call("❌ Tables with errors: 0")
+        mock_logger.info.assert_any_call("🚨 Global errors: 0")
         mock_logger.info.assert_any_call("⏱️  Total elapsed time: 15 seconds")
         mock_logger.info.assert_any_call("🟢 Process completed successfully")
 
@@ -144,7 +158,41 @@ class TestProcessSummary:
         mock_logger.info.assert_any_call("✅ Tables updated: 0")
         mock_logger.info.assert_any_call("🚀 Tables published: 0")
         mock_logger.info.assert_any_call("❌ Tables with errors: 0")
+        mock_logger.info.assert_any_call("🚨 Global errors: 0")
         mock_logger.info.assert_any_call("🔵 No tables required processing")
+
+    @patch("dolly.summary.logger")
+    def test_log_summary_with_global_errors(self, mock_logger):
+        """Test log_summary with global errors."""
+        summary = ProcessSummary()
+        summary.start_time = 1000.0
+        summary.end_time = 1010.0
+        summary.add_global_error("ValueError: Invalid configuration")
+        summary.add_global_error("ConnectionError: Database unavailable")
+
+        summary.log_summary()
+
+        mock_logger.info.assert_any_call("🚨 Global errors: 2")
+        mock_logger.info.assert_any_call("   • ValueError: Invalid configuration")
+        mock_logger.info.assert_any_call("   • ConnectionError: Database unavailable")
+        mock_logger.info.assert_any_call("🔴 Process failed due to global errors")
+
+    @patch("dolly.summary.logger")
+    def test_log_summary_with_both_table_and_global_errors(self, mock_logger):
+        """Test log_summary with both table and global errors."""
+        summary = ProcessSummary()
+        summary.start_time = 1000.0
+        summary.end_time = 1010.0
+        summary.add_table_error("sgid.test.table1", "update", "Connection failed")
+        summary.add_global_error("ValueError: Invalid configuration")
+
+        summary.log_summary()
+
+        # Should show both types of errors
+        mock_logger.info.assert_any_call("❌ Tables with errors: 1")
+        mock_logger.info.assert_any_call("🚨 Global errors: 1")
+        # Global errors take precedence in overall status
+        mock_logger.info.assert_any_call("🔴 Process failed due to global errors")
 
 
 class TestSummaryGlobalFunctions:
@@ -214,6 +262,7 @@ class TestSlackIntegration:
         message_str = str(message)
         assert "🟢 *Status:* Process completed successfully" in message_str
         assert "sgid.test.table1" in message_str
+        assert "Global errors: *0*" in message_str
 
     def test_format_slack_message_with_errors(self):
         """Test formatting a process summary with errors as Slack message."""
@@ -228,6 +277,7 @@ class TestSlackIntegration:
         message_str = str(message)
         assert "🟡 *Status:* Process completed with errors" in message_str
         assert "sgid.test.table1" in message_str
+        assert "Global errors: *0*" in message_str
 
     def test_format_slack_message_no_tables(self):
         """Test formatting a summary with no tables processed."""
@@ -243,6 +293,25 @@ class TestSlackIntegration:
             "🔵 *Status:* Process completed - no tables required processing"
             in message_str
         )
+        assert "Global errors: *0*" in message_str
+
+    def test_format_slack_message_with_global_errors(self):
+        """Test formatting a process summary with global errors as Slack message."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+        summary.add_global_error("ValueError: Invalid configuration")
+        summary.add_global_error("ConnectionError: Database unavailable")
+
+        message = summary.format_slack_message()
+
+        # Convert message to string for easier testing
+        message_str = str(message)
+        assert "🔴 *Status:* Process failed due to global errors" in message_str
+        assert "Global errors: *2*" in message_str
+        assert "🚨 *Global Errors (Process Failed):*" in message_str
+        assert "ValueError: Invalid configuration" in message_str
+        assert "ConnectionError: Database unavailable" in message_str
 
     @patch("dolly.summary.requests.post")
     def test_post_to_slack_success(self, mock_post):

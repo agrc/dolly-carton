@@ -132,6 +132,19 @@ def _main_logic(tables: Optional[str] = None) -> None:
             current_time = datetime.now()
             set_last_checked(current_time)
 
+    except Exception as e:
+        # Record the global error in the summary
+        from dolly.summary import get_current_summary
+
+        current_summary = get_current_summary()
+        if current_summary is not None:
+            error_message = f"{type(e).__name__}: {str(e)}"
+            current_summary.add_global_error(error_message)
+            logger.error(f"Global error occurred: {error_message}", exc_info=True)
+
+        # Re-raise the exception to maintain existing behavior
+        raise
+
     finally:
         finish_summary(time.time())
 
