@@ -3,6 +3,7 @@
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from textwrap import dedent
 from typing import List
 
 import humanize
@@ -287,11 +288,19 @@ class ProcessSummary:
                 "type": "section",
                 "text": {
                     "type": "mrkdwn",
-                    "text": f"*📊 Processing Summary*\n• Tables processed: *{total_tables}*\n• Updated: *{len(self.tables_updated)}*\n• Published: *{len(self.tables_published)}*\n• Table errors: *{len(self.tables_with_errors)}*\n• Global errors: *{len(self.global_errors)}*",
+                    "text": (
+                        dedent(f"""
+                            *📊 Processing Summary*
+                            • Tables processed: *{total_tables}*
+                            • Updated: *{len(self.tables_updated)}*
+                            • Published: *{len(self.tables_published)}*
+                            • Table errors: *{len(self.tables_with_errors)}*
+                            • Global errors: *{len(self.global_errors)}*
+                        """)
+                    ),
                 },
             }
         )
-
         # Add divider before detailed sections
         if (
             self.tables_updated
