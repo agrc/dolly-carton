@@ -122,9 +122,80 @@ class ProcessSummary:
 
         logger.info("=" * 80)
 
+    def _create_text_blocks_with_limit(
+        self, title: str, items: List[str], prefix: str = "•", max_chars: int = 2800
+    ) -> List[dict]:
+        """
+        Create multiple blocks if content exceeds character limit.
+
+        Args:
+            title: Section title (e.g., "✅ *Updated Tables*")
+            items: List of items to include
+            prefix: Prefix for each item (default: "•")
+            max_chars: Maximum characters per block (leaving buffer for title and formatting)
+
+        Returns:
+            List of block dictionaries
+        """
+        if not items:
+            return []
+
+        blocks = []
+        current_items = []
+        current_length = len(title) + 10  # Buffer for formatting
+
+        for item in items:
+            # For table names, wrap in backticks; for error messages, use as-is
+            if ":" in item and ("Error" in title or "error" in item.lower()):
+                item_text = f"{prefix} {item}\n"
+            else:
+                item_text = f"{prefix} `{item}`\n"
+            item_length = len(item_text)
+
+            # If adding this item would exceed the limit, create a block with current items
+            if current_length + item_length > max_chars and current_items:
+                item_list = "".join(current_items).rstrip()
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"{title}\n{item_list}",
+                        },
+                    }
+                )
+                current_items = []
+                current_length = len(title) + 10
+                # Update title for continuation blocks
+                if "*(continued)*" not in title:
+                    # Find the last asterisk and insert (continued) before it
+                    if title.endswith("*"):
+                        title = title[:-1] + "*(continued)*"
+                    else:
+                        title = title + "*(continued)*"
+
+            current_items.append(item_text)
+            current_length += item_length
+
+        # Add the remaining items
+        if current_items:
+            item_list = "".join(current_items).rstrip()
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"{title}\n{item_list}",
+                    },
+                }
+            )
+
+        return blocks
+
     def format_slack_message(self) -> dict:
         """
         Format the summary as a Slack message payload using webhook-compatible Block Kit layout.
+        Handles Slack's 3000 character limit per block by splitting long content.
 
         Returns:
             dict: Slack message payload with blocks that work with webhooks
@@ -214,70 +285,38 @@ class ProcessSummary:
 
         # Updated tables section
         if self.tables_updated:
-            table_list = "\n".join([f"• `{table}`" for table in self.tables_updated])
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"✅ *Updated Tables*\n{table_list}",
-                    },
-                }
+            updated_blocks = self._create_text_blocks_with_limit(
+                "✅ *Updated Tables*", self.tables_updated
             )
+            blocks.extend(updated_blocks)
 
         # Published tables section
         if self.tables_published:
-            table_list = "\n".join([f"• `{table}`" for table in self.tables_published])
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"🚀 *Published Tables*\n{table_list}",
-                    },
-                }
+            published_blocks = self._create_text_blocks_with_limit(
+                "🚀 *Published Tables*", self.tables_published
             )
+            blocks.extend(published_blocks)
 
         # Error sections
         if self.tables_with_errors:
-            table_list = "\n".join(
-                [f"• `{table}`" for table in self.tables_with_errors]
+            error_blocks = self._create_text_blocks_with_limit(
+                "❌ *Tables with Errors*", self.tables_with_errors
             )
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"❌ *Tables with Errors*\n{table_list}",
-                    },
-                }
-            )
+            blocks.extend(error_blocks)
 
             # Update errors with detailed formatting
             if self.update_errors:
-                error_list = "\n".join([f"• {error}" for error in self.update_errors])
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"*🔧 Update Error Details:*\n{error_list}",
-                        },
-                    }
+                update_error_blocks = self._create_text_blocks_with_limit(
+                    "*🔧 Update Error Details:*", self.update_errors, prefix="•"
                 )
+                blocks.extend(update_error_blocks)
 
             # Publish errors with detailed formatting
             if self.publish_errors:
-                error_list = "\n".join([f"• {error}" for error in self.publish_errors])
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"*📤 Publish Error Details:*\n{error_list}",
-                        },
-                    }
+                publish_error_blocks = self._create_text_blocks_with_limit(
+                    "*📤 Publish Error Details:*", self.publish_errors, prefix="•"
                 )
+                blocks.extend(publish_error_blocks)
 
         if is_running_in_gcp:
             # Create GCP logs link with time range based on actual process execution time
