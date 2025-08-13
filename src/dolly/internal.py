@@ -3,6 +3,7 @@ import logging
 import os
 from datetime import datetime
 from pathlib import Path
+from textwrap import dedent
 from typing import cast
 
 import pyodbc
@@ -123,10 +124,10 @@ def _build_change_detection_query(last_checked: datetime) -> str:
         SQL query string
     """
 
-    return f"""
+    return dedent(f"""
         SELECT table_name FROM SGID.META.ChangeDetection
         WHERE last_modified > '{last_checked.strftime("%Y-%m-%d %H:%M:%S")}'
-    """
+    """)
 
 
 def _build_update_agol_item_query(table: str, item_id: str) -> str:
@@ -141,11 +142,11 @@ def _build_update_agol_item_query(table: str, item_id: str) -> str:
         SQL query string
     """
 
-    return f"""
+    return dedent(f"""
         UPDATE SGID.META.AGOLItems
         SET AGOL_ITEM_ID = '{item_id}'
         WHERE UPPER(TABLENAME) = UPPER('{table}')
-    """
+    """)
 
 
 def get_updated_tables(
@@ -200,10 +201,10 @@ def get_agol_items_lookup(
             "agol_items_lookup"
         ]
 
-    query = """
+    query = dedent("""
         SELECT TABLENAME, AGOL_ITEM_ID, AGOL_PUBLISHED_NAME, GEOMETRY_TYPE
         FROM SGID.META.AGOLItems
-    """
+    """)
 
     # Use provided connection or create a new one
     if connection is None:
