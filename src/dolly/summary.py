@@ -96,29 +96,25 @@ class ProcessSummary:
             logger.info("🚀 Tables published: 0")
 
         # Error reporting
-        if self.tables_with_errors or self.global_errors:
-            if self.tables_with_errors:
-                logger.info(f"❌ Tables with errors: {len(self.tables_with_errors)}")
-                for table in self.tables_with_errors:
-                    logger.info(f"   • {table}")
+        if self.tables_with_errors:
+            logger.info(f"❌ Tables with errors: {len(self.tables_with_errors)}")
+            for table in self.tables_with_errors:
+                logger.info(f"   • {table}")
 
-                if self.update_errors:
-                    logger.info("📝 Update errors:")
-                    for error in self.update_errors:
-                        logger.info(f"   • {error}")
-
-                if self.publish_errors:
-                    logger.info("📝 Publish errors:")
-                    for error in self.publish_errors:
-                        logger.info(f"   • {error}")
-
-            if self.global_errors:
-                logger.info(f"🚨 Global errors: {len(self.global_errors)}")
-                for error in self.global_errors:
+            if self.update_errors:
+                logger.info("📝 Update errors:")
+                for error in self.update_errors:
                     logger.info(f"   • {error}")
-        else:
-            logger.info("❌ Tables with errors: 0")
-            logger.info("🚨 Global errors: 0")
+
+            if self.publish_errors:
+                logger.info("📝 Publish errors:")
+                for error in self.publish_errors:
+                    logger.info(f"   • {error}")
+
+        if self.global_errors:
+            logger.info(f"🚨 Global errors: {len(self.global_errors)}")
+            for error in self.global_errors:
+                logger.info(f"   • {error}")
 
         # Timing information
         elapsed_time = self.get_total_elapsed_time()
