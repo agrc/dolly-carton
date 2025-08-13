@@ -26,7 +26,7 @@ from dolly.utils import (
 
 logger = logging.getLogger(__name__)
 
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 secrets = get_secrets()
 host = secrets["INTERNAL_HOST"]

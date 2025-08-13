@@ -4,7 +4,7 @@ import logging
 import os
 from datetime import datetime, timedelta
 
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT", "dev")
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 # Conditional import for Firestore (only needed in gcp)
 firestore = None
