@@ -1,6 +1,7 @@
 {
   "cSpell.words": [
     "accesstoken",
+    "agol",
     "Buildx",
     "charliermarsh",
     "cloudb",
@@ -9,9 +10,11 @@
     "Defn",
     "deqmap",
     "docstrings",
+    "fgdb",
     "firestore",
     "fromitem",
     "GDAL",
+    "geodatabase",
     "gethostname",
     "ITEMTYPES",
     "MSSQLSPATIAL",
@@ -24,6 +27,7 @@
     "rptyr",
     "ryanluker",
     "saltlake",
+    "sgid",
     "sharedvpc",
     "subnetworks"
   ],

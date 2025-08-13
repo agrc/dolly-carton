@@ -357,8 +357,6 @@ def update_feature_services(
         gis_connection: GIS connection (optional, will create new if not provided).
                        Primarily used for testing to inject mock connections.
     """
-    #: TODO handle missing agol item lookup entry
-
     if gis_connection is None:
         gis_connection = _get_gis_connection()
 
