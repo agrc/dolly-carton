@@ -143,7 +143,9 @@ def _search_existing_item(title: str, gis_connection: GIS | None = None) -> list
             max_items=1,
         )
     except Exception:
-        logger.error(f"Error searching for existing gdb item with title {title}")
+        logger.error(
+            f"Error searching for existing gdb item with title {title}", exc_info=True
+        )
 
         return []
 
@@ -367,7 +369,7 @@ def update_feature_services(
         item = _get_service_item_from_agol(table, agol_items_lookup, gis_connection)
         if item is None:
             has_errors = True
-            error_msg = "Could not find AGOL item"
+            error_msg = "No entry in AGOLItems with this table name"
             logger.error(f"Failed to update feature service for {table}: {error_msg}")
             if summary:
                 summary.add_table_error(table, "update", error_msg)
@@ -402,7 +404,9 @@ def update_feature_services(
                 if summary:
                     summary.add_table_updated(table)
         except Exception as e:
-            logger.error(f"Failed to update feature service for {table}: {e}")
+            logger.error(
+                f"Failed to update feature service for {table}: {e}", exc_info=True
+            )
             has_errors = True
             if summary:
                 summary.add_table_error(table, "update", str(e))
@@ -453,7 +457,10 @@ def _create_and_publish_service(
 
         return item
     except Exception as e:
-        logger.error(f"Failed to create and publish service for table {table}: {e}")
+        logger.error(
+            f"Failed to create and publish service for table {table}: {e}",
+            exc_info=True,
+        )
 
         return None
 
@@ -504,7 +511,8 @@ def _configure_published_service(
         return True
     except Exception as e:
         logger.error(
-            f"Failed to configure published service {item.id} for table {table}: {e}"
+            f"Failed to configure published service {item.id} for table {table}: {e}",
+            exc_info=True,
         )
 
         return False

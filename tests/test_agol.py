@@ -378,7 +378,7 @@ class TestSearchExistingItem:
 
         # Verify error logging
         mock_logger.error.assert_called_once_with(
-            f"Error searching for existing gdb item with title {title}"
+            f"Error searching for existing gdb item with title {title}", exc_info=True
         )
 
         # Should return empty list on exception
