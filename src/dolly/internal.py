@@ -28,10 +28,10 @@ logger = logging.getLogger(__name__)
 APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
 
 secrets = get_secrets()
-host = secrets.get("INTERNAL_HOST")
-database = secrets.get("INTERNAL_DATABASE")
-username = secrets.get("INTERNAL_USERNAME")
-password = secrets.get("INTERNAL_PASSWORD")
+host = secrets["INTERNAL_HOST"]
+database = secrets["INTERNAL_DATABASE"]
+username = secrets["INTERNAL_USERNAME"]
+password = secrets["INTERNAL_PASSWORD"]
 
 CONNECTION_STRING = (
     f"DRIVER={{ODBC Driver 18 for SQL Server}};"

@@ -166,8 +166,8 @@ def cleanup_dev_agol_items() -> None:
         secrets = get_secrets()
         gis = GIS(
             "https://utah.maps.arcgis.com",
-            username=secrets.get("AGOL_USERNAME"),
-            password=secrets.get("AGOL_PASSWORD"),
+            username=secrets["AGOL_USERNAME"],
+            password=secrets["AGOL_PASSWORD"],
         )
         agol_items_lookup = get_agol_items_lookup()
 

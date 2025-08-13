@@ -442,7 +442,7 @@ def finish_summary(end_time: float) -> None:
         # Post to Slack if webhook URL is available
         try:
             secrets = get_secrets()
-            slack_webhook_url = secrets.get("SLACK_WEBHOOK_URL")
+            slack_webhook_url = secrets["SLACK_WEBHOOK_URL"]
 
             if slack_webhook_url:
                 _current_summary.post_to_slack(slack_webhook_url)
