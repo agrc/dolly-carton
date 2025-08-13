@@ -115,8 +115,8 @@ def _get_gis_connection() -> GIS:
 
     return GIS(
         "https://utah.maps.arcgis.com",
-        username=secrets.get("AGOL_USERNAME"),
-        password=secrets.get("AGOL_PASSWORD"),
+        username=secrets["AGOL_USERNAME"],
+        password=secrets["AGOL_PASSWORD"],
     )
 
 
