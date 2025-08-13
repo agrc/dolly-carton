@@ -25,7 +25,7 @@ logger = logging.getLogger(__name__)
 #: throw exceptions on errors rather than returning None
 gdal.UseExceptions()
 
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 def clean_up() -> None:

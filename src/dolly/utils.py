@@ -14,7 +14,7 @@ RETRY_DELAY_TIME = 2
 
 OUTPUT_PATH = Path("output")
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 #: copied from palletjack

@@ -13,7 +13,7 @@ from dolly.utils import get_secrets, get_service_from_title, retry
 
 logger = logging.getLogger(__name__)
 
-APP_ENVIRONMENT = os.getenv("APP_ENVIRONMENT")
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 def _generate_upload_title(fgdb_stem: str) -> str:
