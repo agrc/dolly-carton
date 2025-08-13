@@ -19,6 +19,7 @@
 - **Type hints** - Use type hints where appropriate for better code clarity
 
 ### General Guidelines
+- **Present a plan first** - Before making changes, outline the intended modifications and their purpose.
 - **Incremental changes** - Make changes in logical, reviewable chunks
 - **Preserve backward compatibility** - Ensure existing functionality continues to work
 - **Use dependency injection** - Design functions to accept optional parameters for testing
