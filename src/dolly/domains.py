@@ -288,7 +288,7 @@ def create_domains_in_fgdb(domains: Dict[str, Dict], fgdb_path: str) -> bool:
         return success_count > 0
 
     except Exception as e:
-        logger.error(f"Error creating domains in FGDB: {e}")
+        logger.error(f"Error creating domains in FGDB: {e}", exc_info=True)
 
         return False
 
@@ -365,7 +365,10 @@ def create_coded_value_domain(
         return True
 
     except Exception as e:
-        logger.error(f"Failed to create coded value domain {domain_name}: {e}")
+        logger.error(
+            f"Failed to create coded value domain {domain_name}: {e}", exc_info=True
+        )
+
         return False
 
 
@@ -414,11 +417,14 @@ def create_range_domain(
                 logger.warning(
                     f"Range domain {domain_name} has unsupported field type: {esri_field_type}"
                 )
+
                 return False
         except ValueError as e:
             logger.error(
-                f"Failed to convert range values for domain {domain_name}: {e}"
+                f"Failed to convert range values for domain {domain_name}: {e}",
+                exc_info=True,
             )
+
             return False
 
         # Create the range field domain
@@ -446,7 +452,8 @@ def create_range_domain(
         return True
 
     except Exception as e:
-        logger.error(f"Failed to create range domain {domain_name}: {e}")
+        logger.error(f"Failed to create range domain {domain_name}: {e}", exc_info=True)
+
         return False
 
 
@@ -553,5 +560,6 @@ def apply_domains_to_fields(
         return success_count > 0
 
     except Exception as e:
-        logger.error(f"Error applying domain associations: {e}")
+        logger.error(f"Error applying domain associations: {e}", exc_info=True)
+
         return False

@@ -431,11 +431,11 @@ class ProcessSummary:
                 return all_successful
 
         except requests.exceptions.RequestException as e:
-            logger.error(f"Error posting to Slack: {e}")
+            logger.error(f"Error posting to Slack: {e}", exc_info=True)
 
             return False
         except Exception as e:
-            logger.error(f"Unexpected error posting to Slack: {e}")
+            logger.error(f"Unexpected error posting to Slack: {e}", exc_info=True)
 
             return False
 

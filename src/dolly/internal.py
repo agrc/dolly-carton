@@ -334,7 +334,7 @@ def _copy_table_to_fgdb(
 
         return True
     except Exception as e:
-        logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}")
+        logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}", exc_info=True)
 
         return False
 
