@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from pathlib import Path
+from textwrap import dedent
 from unittest.mock import Mock, patch
 
 import pytest
@@ -122,10 +123,10 @@ class TestBuildChangeDetectionQuery:
 
         result = _build_change_detection_query(test_datetime)
 
-        expected_query = """
+        expected_query = dedent("""
         SELECT table_name FROM SGID.META.ChangeDetection
         WHERE last_modified > '2025-01-15 14:30:45'
-    """
+    """)
         assert result.strip() == expected_query.strip()
 
     def test_datetime_formatting_edge_cases(self):
@@ -647,11 +648,11 @@ class TestBuildUpdateAgolItemQuery:
 
         result = _build_update_agol_item_query(table, item_id)
 
-        expected_query = """
+        expected_query = dedent("""
         UPDATE SGID.META.AGOLItems
         SET AGOL_ITEM_ID = 'abc123-def456-ghi789'
         WHERE UPPER(TABLENAME) = UPPER('sgid.test.table1')
-    """
+    """)
         assert result.strip() == expected_query.strip()
 
     def test_query_contains_required_elements(self):

@@ -1,5 +1,6 @@
 import logging
 import xml.etree.ElementTree as ET
+from textwrap import dedent
 from typing import Dict, Optional
 
 import pyodbc
@@ -21,12 +22,12 @@ def get_domain_metadata(connection: pyodbc.Connection) -> Dict[str, Dict]:
     logger.info("Getting domain metadata from geodatabase")
 
     # Get all domains from the geodatabase
-    query = """
-    SELECT d.Name, d.Definition
-    FROM sde.GDB_ITEMS d
-    JOIN sde.GDB_ITEMTYPES dt ON d.Type = dt.UUID
-    WHERE dt.Name IN ('Coded Value Domain', 'Range Domain')
-    """
+    query = dedent("""
+        SELECT d.Name, d.Definition
+        FROM sde.GDB_ITEMS d
+        JOIN sde.GDB_ITEMTYPES dt ON d.Type = dt.UUID
+        WHERE dt.Name IN ('Coded Value Domain', 'Range Domain')
+    """)
 
     cursor = connection.cursor()
     cursor.execute(query)
@@ -177,13 +178,13 @@ def get_table_field_domains(
 
     # Query to get table definition from geodatabase metadata
     # Look for the table using the full name first, then fall back to just the table name
-    query = """
-    SELECT t.Definition
-    FROM sde.GDB_ITEMS t
-    JOIN sde.GDB_ITEMTYPES tt ON t.Type = tt.UUID
-    WHERE tt.Name IN ('Feature Class', 'Table')
-    AND (UPPER(t.Name) = UPPER(?) OR UPPER(t.Name) = UPPER(?))
-    """
+    query = dedent("""
+        SELECT t.Definition
+        FROM sde.GDB_ITEMS t
+        JOIN sde.GDB_ITEMTYPES tt ON t.Type = tt.UUID
+        WHERE tt.Name IN ('Feature Class', 'Table')
+        AND (UPPER(t.Name) = UPPER(?) OR UPPER(t.Name) = UPPER(?))
+    """)
 
     cursor = connection.cursor()
     full_table_name = table_name
