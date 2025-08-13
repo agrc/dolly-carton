@@ -3,7 +3,7 @@ updates:
   - package-ecosystem: pip
     directory: /
     schedule:
-      interval: monthly
+      interval: quarterly
     groups:
       safe-dependencies:
         update-types:
@@ -24,9 +24,22 @@ updates:
   - package-ecosystem: github-actions
     directory: /
     schedule:
-      interval: monthly
+      interval: quarterly
     groups:
       ci-dependencies:
         dependency-type: "production"
+    cooldown:
+      default-days: 10
+
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: quarterly
+    groups:
+      docker-dependencies:
+        patterns:
+          - "*"
+    commit-message:
+      prefix: deps(docker)
     cooldown:
       default-days: 10
