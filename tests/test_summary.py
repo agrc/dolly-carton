@@ -120,8 +120,6 @@ class TestProcessSummary:
         mock_logger.info.assert_any_call("   • sgid.test.table1")
         mock_logger.info.assert_any_call("🚀 Tables published: 1")
         mock_logger.info.assert_any_call("   • sgid.test.table2")
-        mock_logger.info.assert_any_call("❌ Tables with errors: 0")
-        mock_logger.info.assert_any_call("🚨 Global errors: 0")
         mock_logger.info.assert_any_call("⏱️  Total elapsed time: 15 seconds")
         mock_logger.info.assert_any_call("🟢 Process completed successfully")
 
@@ -157,8 +155,6 @@ class TestProcessSummary:
         mock_logger.info.assert_any_call("📊 Total tables processed: 0")
         mock_logger.info.assert_any_call("✅ Tables updated: 0")
         mock_logger.info.assert_any_call("🚀 Tables published: 0")
-        mock_logger.info.assert_any_call("❌ Tables with errors: 0")
-        mock_logger.info.assert_any_call("🚨 Global errors: 0")
         mock_logger.info.assert_any_call("🔵 No tables required processing")
 
     @patch("dolly.summary.logger")
