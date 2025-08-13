@@ -101,13 +101,13 @@ def _get_geometry_option(geometry_type: str) -> str:
     Returns:
         GDAL-compatible geometry option string
     """
-    if geometry_type == "POLYGON":
+    if geometry_type.upper() == "POLYGON":
         return "MULTIPOLYGON"
-    elif geometry_type == "POLYLINE":
+    elif geometry_type.upper() == "POLYLINE":
         return "MULTILINESTRING"
-    elif geometry_type == "STAND ALONE":
+    elif geometry_type.upper() == "STAND ALONE":
         return "NONE"
-    elif geometry_type == "POINT":
+    elif geometry_type.upper() == "POINT":
         return "POINT"
     else:
         raise ValueError(f"Unknown geometry type: {geometry_type}")
