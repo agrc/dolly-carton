@@ -43,5 +43,3 @@ updates:
           - "*"
     commit-message:
       prefix: deps(docker)
-    cooldown:
-      default-days: 10
