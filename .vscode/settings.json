@@ -2,6 +2,7 @@
   "cSpell.words": [
     "accesstoken",
     "agol",
+    "agrc",
     "Buildx",
     "charliermarsh",
     "cloudb",
@@ -29,7 +30,8 @@
     "saltlake",
     "sgid",
     "sharedvpc",
-    "subnetworks"
+    "subnetworks",
+    "UGRC"
   ],
   "editor.formatOnSave": true,
   "python.languageServer": "Pylance",
