@@ -22,7 +22,9 @@ updates:
       semver-patch-days: 7
 
   - package-ecosystem: github-actions
-    directory: /
+    directories:
+      - /
+      - /.github/actions/deploy
     schedule:
       interval: quarterly
     groups:
