@@ -16,6 +16,12 @@ inputs:
   env_vars:
     description: "Environment variables to set in the job"
     required: false
+  shared_vpc_network:
+    description: "The shared VPC network to use"
+    required: true
+  shared_vpc_subnet:
+    description: "The shared VPC subnet to use"
+    required: true
 
 runs:
   using: composite
@@ -75,8 +81,8 @@ runs:
           --memory=1G
           --task-timeout=1h
           --service-account=cloud-run-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
-          --network=projects/ut-dts-sharedvpc-prod/global/networks/ut-dts-sharedvpc-prod-vpc
-          --subnet=projects/ut-dts-sharedvpc-prod/regions/us-west3/subnetworks/ut-dts-sharedvpc-prod-subnet-west3
+          --network=${{ inputs.shared_vpc_network }}
+          --subnet=${{ inputs.shared_vpc_subnet }}
           --vpc-egress=all-traffic
         env_vars: ${{ inputs.env_vars }}
         region: us-west3
