@@ -10,10 +10,6 @@ inputs:
   service_account_email:
     description: "The service account email"
     required: true
-  pause_schedule_job:
-    description: "Pause the scheduler job"
-    required: false
-    default: "no"
   github_token:
     description: "The GitHub token"
     required: true
@@ -24,15 +20,6 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Set globals
-      id: globals
-      shell: bash
-      run: |
-        echo "TOPIC_NAME=dolly-topic" >> "${GITHUB_OUTPUT}"
-        echo "CRON=0 2 * * *" >> "${GITHUB_OUTPUT}"
-        echo "JOB_NAME=dolly-nightly" >> "${GITHUB_OUTPUT}"
-        echo "JOB_DESCRIPTION=Trigger dolly carton every evening at 8 PM MDT" >> "${GITHUB_OUTPUT}"
-
     - name: 🗝️ Authenticate to Google Cloud
       id: auth
       uses: google-github-actions/auth@v2
@@ -80,7 +67,7 @@ runs:
       id: deploy
       uses: google-github-actions/deploy-cloudrun@v2
       with:
-        job: ${{ steps.globals.outputs.JOB_NAME }}
+        job: dolly
         image: us-central1-docker.pkg.dev/${{ inputs.project_id }}/images/job:latest
         secrets: |
           /secrets/app/secrets.json=secrets:latest
@@ -93,32 +80,3 @@ runs:
           --vpc-egress=all-traffic
         env_vars: ${{ inputs.env_vars }}
         region: us-west3
-
-    - name: 🕰️ Create Main Cloud Scheduler
-      shell: bash
-      run: |
-        if [ ! "$(gcloud scheduler jobs list --location=us-west3 | grep ${{ steps.globals.outputs.JOB_NAME }})" ]; then
-          gcloud scheduler jobs create http "${{ steps.globals.outputs.JOB_NAME }}" \
-            --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
-            --schedule="${{ steps.globals.outputs.CRON }}" \
-            --time-zone=America/Denver \
-            --location=us-west3 \
-            --uri="https://us-west3-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
-            --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
-            --quiet
-        else
-          gcloud scheduler jobs update http "${{ steps.globals.outputs.JOB_NAME }}" \
-            --description="${{ steps.globals.outputs.JOB_DESCRIPTION }}" \
-            --schedule="${{ steps.globals.outputs.CRON }}" \
-            --time-zone=America/Denver \
-            --location=us-west3 \
-            --uri="https://us-west3-run.googleapis.com/apis/run.googleapis.com/v1/namespaces/${{ inputs.project_id }}/jobs/${{ steps.globals.outputs.JOB_NAME }}:run" \
-            --oauth-service-account-email=scheduler-sa@${{ inputs.project_id }}.iam.gserviceaccount.com \
-            --quiet
-        fi
-
-    - name: 🙅 Pause Scheduler Job
-      shell: bash
-      if: inputs.pause_schedule_job != 'no'
-      run: |
-        gcloud scheduler jobs pause "${{ steps.globals.outputs.JOB_NAME }}" --location=us-west3 --quiet

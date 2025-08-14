@@ -377,7 +377,7 @@ class ProcessSummary:
                                 {
                                     "type": "link",
                                     "text": "GCP Logs",
-                                    "url": f"https://console.cloud.google.com/logs/query;query=resource.type%20%3D%20%22cloud_run_job%22%20resource.labels.job_name%20%3D%20%22dolly-nightly%22%20resource.labels.location%20%3D%20%22us-west3%22%20severity%3E%3DDEFAULT;storageScope=project;timeRange={log_start_datetime}%2F{log_end_datetime}?authuser=0&inv=1&invt=Ab43MA&project={host}",
+                                    "url": f"https://console.cloud.google.com/logs/query;query=resource.type%20%3D%20%22cloud_run_job%22%20resource.labels.job_name%20%3D%20%22dolly%22%20resource.labels.location%20%3D%20%22us-west3%22%20severity%3E%3DDEFAULT;storageScope=project;timeRange={log_start_datetime}%2F{log_end_datetime}?authuser=0&inv=1&invt=Ab43MA&project={host}",
                                 }
                             ],
                         }
