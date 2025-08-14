@@ -4,6 +4,8 @@
 
 Automated pipeline for syncing SGID data in internal to ArcGIS Online
 
+This is a GCP Cloud Run job that is kicked off from the [AGOL Forklift pallet](https://github.com/agrc/warehouse/blob/main/sgid/~AGOLPallet.py).
+
 ## What it does
 
 1. Queries for updated tables in internal using [SGID.Meta.ChangeDetection](https://github.com/agrc/cambiador)
