@@ -75,6 +75,7 @@ runs:
       with:
         job: dolly
         image: us-central1-docker.pkg.dev/${{ inputs.project_id }}/images/job:latest
+        secrets_update_strategy: overwrite
         secrets: |
           /secrets/app/secrets.json=secrets:latest
         flags: |
