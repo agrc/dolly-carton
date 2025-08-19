@@ -11,6 +11,27 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
+  upload-test-coverage:
+    name: Upload Test Coverage
+    runs-on: ubuntu-latest
+    if: github.ref_name == 'main'
+
+    steps:
+      - name: ⬇️ Set up code
+        uses: actions/checkout@v4
+
+      - name: 🐳 Build Docker image
+        run: docker build --target test -t dolly-carton:test .
+
+      - name: 🧪 Run pytest
+        run: docker run --rm -v ${{ github.workspace }}:/workspace -w /workspace dolly-carton:test pytest
+
+      - name: ⬆️ Upload coverage to Codecov
+        uses: codecov/codecov-action@v5
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./cov.xml
+
   release-please:
     name: Create release
     runs-on: ubuntu-latest
