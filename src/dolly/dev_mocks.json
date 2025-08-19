@@ -27,6 +27,7 @@
     }
   },
   "updated_tables": [
+    "sgid.cadastre.landownership",
     "sgid.society.cemeteries",
     "sgid.boundaries.municipalities",
     "sgid.environment.deqmap_tier2rptyr",
