@@ -426,6 +426,57 @@ class TestMain:
         assert len(test_summary.global_errors) == 1
         assert "ValueError: Invalid configuration" in test_summary.global_errors[0]
 
+    @patch("dolly.main.time.time")
+    @patch("dolly.main.humanize.precisedelta")
+    @patch("dolly.main.set_last_checked")
+    @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_updated_tables")
+    @patch("dolly.main.get_last_checked")
+    @patch("dolly.main.clean_up")
+    @patch("dolly.summary.requests.post")
+    @patch("dolly.main.logger")
+    def test_main_skips_tables_not_in_agol_lookup(
+        self,
+        mock_logger,
+        mock_requests_post,
+        mock_clean_up,
+        mock_get_last_checked,
+        mock_get_updated_tables,
+        mock_get_agol_items_lookup,
+        mock_set_last_checked,
+        mock_precisedelta,
+        mock_time,
+    ):
+        """Test that tables not found in AGOL lookup are skipped."""
+        # Setup mocks
+        mock_time.side_effect = [1000.0, 1005.0]
+        mock_last_checked = datetime(2023, 1, 1)
+        mock_get_last_checked.return_value = mock_last_checked
+        # Return a table that is not present in the AGOL lookup
+        mock_get_updated_tables.return_value = ["sgid.unknown.table"]
+        mock_get_agol_items_lookup.return_value = {}
+        # Mock Slack requests to prevent actual HTTP calls
+        mock_requests_post.return_value.status_code = 200
+        mock_precisedelta.return_value = "5 seconds"
+
+        _main_logic()
+
+        # Verify workflow
+        mock_clean_up.assert_called_once()
+        mock_get_agol_items_lookup.assert_called_once()
+
+        # The table should be skipped and logged
+        mock_logger.info.assert_any_call(
+            "skipping sgid.unknown.table since it does not show up in the agol items lookup"
+        )
+
+        # No existing or new services should be processed
+        mock_logger.info.assert_any_call("No existing feature services to update.")
+        mock_logger.info.assert_any_call("No new feature services to publish.")
+
+        # set_last_checked should still be called since change detection was used
+        mock_set_last_checked.assert_called_once()
+
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
     @patch("dolly.main.zip_and_upload_fgdb")
