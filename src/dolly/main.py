@@ -94,6 +94,13 @@ def _main_logic(tables: Optional[str] = None) -> None:
         updated_tables_with_existing_services = []
         updated_tables_without_existing_services = []
         for table in updated_tables:
+            #: skip tables that do not show up in agol items lookup
+            #: these are tables such as land ownership that are hosted by other AGOL orgs
+            if table not in agol_items_lookup:
+                logger.info(
+                    f"skipping {table} since it does not show up in the agol items lookup"
+                )
+                continue
             if agol_items_lookup[table]["item_id"] is not None:
                 updated_tables_with_existing_services.append(table)
             else:
