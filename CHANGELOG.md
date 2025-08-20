@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.1](https://github.com/agrc/dolly-carton/compare/v1.0.0...v1.0.1) (2025-08-20)
+
+
+### Bug Fixes
+
+* skip updated tables not hosted by UGRC ([8a503f3](https://github.com/agrc/dolly-carton/commit/8a503f3a574243e11d7d0535859c4399e437e463))
+
 ## 1.0.0 (2025-08-14)
 
 
