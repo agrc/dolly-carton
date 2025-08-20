@@ -11,8 +11,10 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  upload-test-coverage:
-    name: Upload Test Coverage
+  test-unit:
+    name: Unit tests
+    permissions:
+      contents: read
     runs-on: ubuntu-latest
     if: github.ref_name == 'main'
 
