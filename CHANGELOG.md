@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.2](https://github.com/agrc/dolly-carton/compare/v1.0.1...v1.0.2) (2025-08-21)
+
+
+### Bug Fixes
+
+* bump run job memory ([14556ad](https://github.com/agrc/dolly-carton/commit/14556ad8b2181c66883164cc79247ec119a0c4ef))
+
 ## [1.0.1](https://github.com/agrc/dolly-carton/compare/v1.0.0...v1.0.1) (2025-08-20)
 
 
