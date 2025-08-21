@@ -1,7 +1,6 @@
 import json
 import logging
 import os
-from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
 from typing import cast
@@ -113,21 +112,18 @@ def _get_geometry_option(geometry_type: str) -> str:
         raise ValueError(f"Unknown geometry type: {geometry_type}")
 
 
-def _build_change_detection_query(last_checked: datetime) -> str:
-    """
-    Build SQL query for retrieving updated tables from change detection.
-
-    Args:
-        last_checked: The datetime to check for updates since
+def _build_change_detection_hashes_query() -> str:
+    """Build SQL query to retrieve current table hashes from ChangeDetection.
 
     Returns:
-        SQL query string
+        SQL query string selecting table_name and hash.
     """
 
-    return dedent(f"""
-        SELECT table_name FROM SGID.META.ChangeDetection
-        WHERE last_modified > '{last_checked.strftime("%Y-%m-%d %H:%M:%S")}'
-    """)
+    return dedent(
+        """
+        SELECT table_name, hash FROM SGID.META.ChangeDetection
+    """
+    )
 
 
 def _build_update_agol_item_query(table: str, item_id: str) -> str:
@@ -149,38 +145,61 @@ def _build_update_agol_item_query(table: str, item_id: str) -> str:
     """)
 
 
-def get_updated_tables(
-    last_checked: datetime, connection: pyodbc.Connection | None = None
-) -> list[str]:
-    """
-    Get a list of updated feature classes/tables since the last checked time.
+def get_current_hashes(
+    connection: pyodbc.Connection | None = None,
+) -> dict[str, str]:
+    """Retrieve current hashes for all tables from ChangeDetection.
 
     Args:
-        last_checked: The datetime to check for updates since
-        connection: Database connection (optional, will create new if not provided).
-                   Primarily used for testing to inject mock connections.
+        connection: Optional injected DB connection (testing).
 
     Returns:
-        List of table names that have been updated
+        Mapping of table name (lower-case) -> hash string.
     """
-    if APP_ENVIRONMENT == "dev" or APP_ENVIRONMENT == "staging":
-        return json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))["updated_tables"]
+    if APP_ENVIRONMENT in {"dev", "staging"}:
+        # Derive synthetic hashes for dev updated tables so logic exercises paths
+        data = json.loads(DEV_MOCKS_PATH.read_text(encoding="utf-8"))
+        tables = data.get("updated_tables", [])
 
-    query = _build_change_detection_query(last_checked)
+        return {t.lower(): f"dev-hash-{i}" for i, t in enumerate(tables)}
 
-    # Use provided connection or create a new one
+    query = _build_change_detection_hashes_query()
+
     if connection is None:
         connection = _get_database_connection()
 
     try:
         cursor = cast(pyodbc.Connection, connection).cursor()
         cursor.execute(query)
-        updated_tables = cursor.fetchall()
+        rows = cursor.fetchall()
         cursor.close()
-
-        return [table[0] for table in updated_tables]
+        return {row[0].lower(): str(row[1]) for row in rows}
     finally:
         connection.close()
+
+
+def determine_updated_tables(
+    stored_hashes: dict[str, str], current_hashes: dict[str, str]
+) -> list[str]:
+    """Determine which tables need processing based on hash diffs.
+
+    A table needs processing if:
+      - It's new (not in stored_hashes)
+      - Its hash value differs from the stored one
+
+    Args:
+        stored_hashes: Previously processed hashes from Firestore.
+        current_hashes: Current hashes from ChangeDetection.
+
+    Returns:
+        List of fully qualified table names needing processing (as keys present in current_hashes).
+    """
+    updated: list[str] = []
+    for table, hash in current_hashes.items():
+        if table not in stored_hashes or stored_hashes[table] != hash:
+            updated.append(table)
+
+    return updated
 
 
 def get_agol_items_lookup(

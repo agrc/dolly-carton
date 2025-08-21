@@ -1,6 +1,5 @@
 """Tests for internal.py functions"""
 
-from datetime import datetime
 from pathlib import Path
 from textwrap import dedent
 from unittest.mock import Mock, patch
@@ -8,15 +7,16 @@ from unittest.mock import Mock, patch
 import pytest
 
 from dolly.internal import (
-    _build_change_detection_query,
+    _build_change_detection_hashes_query,
     _build_update_agol_item_query,
     _copy_table_to_fgdb,
     _generate_output_path,
     _get_geometry_option,
     _prepare_gdal_options,
     create_fgdb,
+    determine_updated_tables,
     get_agol_items_lookup,
-    get_updated_tables,
+    get_current_hashes,
     update_agol_item,
 )
 
@@ -114,117 +114,75 @@ class TestGetGeometryOption:
             _get_geometry_option("")
 
 
-class TestBuildChangeDetectionQuery:
-    """Test cases for the _build_change_detection_query function."""
+class TestBuildChangeDetectionHashesQuery:
+    """Tests for the _build_change_detection_hashes_query function."""
 
-    def test_query_structure_and_format(self):
-        """Test that query has correct structure and datetime formatting."""
-        test_datetime = datetime(2025, 1, 15, 14, 30, 45)
-
-        result = _build_change_detection_query(test_datetime)
-
-        expected_query = dedent("""
-        SELECT table_name FROM SGID.META.ChangeDetection
-        WHERE last_modified > '2025-01-15 14:30:45'
-    """)
-        assert result.strip() == expected_query.strip()
-
-    def test_datetime_formatting_edge_cases(self):
-        """Test datetime formatting with edge cases."""
-        # Test with single digit values
-        test_datetime = datetime(2025, 1, 1, 1, 1, 1)
-
-        result = _build_change_detection_query(test_datetime)
-
-        assert "'2025-01-01 01:01:01'" in result
-
-    def test_query_contains_required_elements(self):
-        """Test that query contains all required SQL elements."""
-        test_datetime = datetime(2025, 7, 25, 12, 0, 0)
-
-        result = _build_change_detection_query(test_datetime)
-
-        # Check for required SQL components
-        assert "SELECT table_name" in result
-        assert "FROM SGID.META.ChangeDetection" in result
-        assert "WHERE last_modified >" in result
-        assert "2025-07-25 12:00:00" in result
+    def test_query_structure(self):
+        result = _build_change_detection_hashes_query()
+        assert "SELECT table_name, hash FROM SGID.META.ChangeDetection" in result
 
 
-class TestGetUpdatedTables:
-    """Test cases for the get_updated_tables function."""
-
+class TestGetCurrentHashes:
     @patch("dolly.internal.APP_ENVIRONMENT", "dev")
     @patch("dolly.internal.DEV_MOCKS_PATH")
-    def test_dev_environment_returns_mock_data(self, mock_path):
-        """Test that dev environment returns mock data."""
-        mock_path.read_text.return_value = '{"updated_tables": ["table1", "table2"]}'
-
-        result = get_updated_tables(datetime.now())
-
-        assert result == ["table1", "table2"]
-        mock_path.read_text.assert_called_once_with(encoding="utf-8")
+    def test_dev_environment_synthetic_hashes(self, mock_path):
+        mock_path.read_text.return_value = '{"updated_tables": ["Table1", "Table2"]}'
+        result = get_current_hashes()
+        assert "table1" in result and "table2" in result
+        assert result["table1"].startswith("dev-hash-")
 
     @patch("dolly.internal.APP_ENVIRONMENT", "prod")
-    @patch("dolly.internal._build_change_detection_query")
-    def test_production_environment_uses_database(self, mock_query_builder):
-        """Test that production environment queries the database."""
-        # Setup mocks
-        mock_query_builder.return_value = "SELECT table_name FROM ChangeDetection"
+    @patch("dolly.internal._build_change_detection_hashes_query")
+    def test_prod_environment_queries_database(self, mock_query_builder):
+        mock_query_builder.return_value = "SELECT table_name, hash FROM ChangeDetection"
         mock_connection = Mock()
         mock_cursor = Mock()
         mock_connection.cursor.return_value = mock_cursor
-        mock_cursor.fetchall.return_value = [("table1",), ("table2",)]
-
-        test_datetime = datetime(2025, 1, 15, 12, 0, 0)
-
-        result = get_updated_tables(test_datetime, mock_connection)
-
-        assert result == ["table1", "table2"]
-        mock_query_builder.assert_called_once_with(test_datetime)
-        mock_connection.cursor.assert_called_once()
+        mock_cursor.fetchall.return_value = [("Table1", "h1"), ("Table2", "h2")]
+        result = get_current_hashes(mock_connection)
+        assert result == {"table1": "h1", "table2": "h2"}
         mock_cursor.execute.assert_called_once_with(
-            "SELECT table_name FROM ChangeDetection"
+            "SELECT table_name, hash FROM ChangeDetection"
         )
-        mock_cursor.fetchall.assert_called_once()
-        mock_cursor.close.assert_called_once()
+        mock_connection.close.assert_called_once()
 
     @patch("dolly.internal.APP_ENVIRONMENT", "prod")
     @patch("dolly.internal._get_database_connection")
-    @patch("dolly.internal._build_change_detection_query")
-    def test_creates_connection_when_none_provided(
-        self, mock_query_builder, mock_get_connection
-    ):
-        """Test that function creates connection when none provided."""
-        # Setup mocks
-        mock_query_builder.return_value = "SELECT table_name FROM ChangeDetection"
+    @patch("dolly.internal._build_change_detection_hashes_query")
+    def test_creates_connection_when_none(self, mock_query_builder, mock_get_conn):
+        mock_query_builder.return_value = "SELECT table_name, hash FROM ChangeDetection"
         mock_connection = Mock()
         mock_cursor = Mock()
         mock_connection.cursor.return_value = mock_cursor
-        mock_cursor.fetchall.return_value = [("table1",)]
-        mock_get_connection.return_value = mock_connection
-
-        result = get_updated_tables(datetime.now())
-
-        assert result == ["table1"]
-        mock_get_connection.assert_called_once()
+        mock_cursor.fetchall.return_value = [("Table1", "h1")]
+        mock_get_conn.return_value = mock_connection
+        result = get_current_hashes()
+        assert result == {"table1": "h1"}
+        mock_get_conn.assert_called_once()
         mock_connection.close.assert_called_once()
 
-    @patch("dolly.internal.APP_ENVIRONMENT", "prod")
-    @patch("dolly.internal._build_change_detection_query")
-    def test_closes_provided_connection(self, mock_query_builder):
-        """Test that function closes provided connection."""
-        # Setup mocks
-        mock_query_builder.return_value = "SELECT table_name FROM ChangeDetection"
-        mock_connection = Mock()
-        mock_cursor = Mock()
-        mock_connection.cursor.return_value = mock_cursor
-        mock_cursor.fetchall.return_value = [("table1",)]
 
-        result = get_updated_tables(datetime.now(), mock_connection)
+class TestDetermineUpdatedTables:
+    def test_new_table_detected(self):
+        stored = {"table1": "h1"}
+        current = {"table1": "h1", "table2": "h2"}
+        assert determine_updated_tables(stored, current) == ["table2"]
 
-        assert result == ["table1"]
-        mock_connection.close.assert_called_once()
+    def test_changed_hash_detected(self):
+        stored = {"table1": "h1"}
+        current = {"table1": "h2"}
+        assert determine_updated_tables(stored, current) == ["table1"]
+
+    def test_no_changes(self):
+        stored = {"table1": "h1"}
+        current = {"table1": "h1"}
+        assert determine_updated_tables(stored, current) == []
+
+    def test_multiple_mixed(self):
+        stored = {"table1": "h1", "table2": "h2"}
+        current = {"table1": "h1", "table2": "h3", "table3": "h4"}
+        result = determine_updated_tables(stored, current)
+        assert set(result) == {"table2", "table3"}
 
 
 class TestGetAgolItemsLookup:
