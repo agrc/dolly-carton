@@ -1,7 +1,7 @@
 import logging
 import os
 import time
-from datetime import datetime, timedelta
+from datetime import timedelta
 from typing import Optional
 
 import humanize
@@ -14,8 +14,13 @@ from dolly.agol import (
     update_feature_services,
     zip_and_upload_fgdb,
 )
-from dolly.internal import create_fgdb, get_agol_items_lookup, get_updated_tables
-from dolly.state import get_last_checked, set_last_checked
+from dolly.internal import (
+    create_fgdb,
+    determine_updated_tables,
+    get_agol_items_lookup,
+    get_current_hashes,
+)
+from dolly.state import get_table_hashes, set_table_hash
 from dolly.summary import finish_summary, start_summary
 from dolly.utils import OUTPUT_PATH, get_secrets
 
@@ -49,7 +54,7 @@ def clean_up() -> None:
     logger.info("Cleaned up temporary files.")
 
 
-def _main_logic(tables: Optional[str] = None) -> None:
+def _main_logic(cli_tables: Optional[str] = None) -> None:
     """
     Core business logic for the Dolly Carton process.
 
@@ -70,18 +75,18 @@ def _main_logic(tables: Optional[str] = None) -> None:
     try:
         clean_up()
 
+        current_hashes = get_current_hashes()
+
         # Use CLI-provided tables if specified, otherwise use change detection
-        if tables:
+        if cli_tables:
             updated_tables = [
-                table.strip() for table in tables.split(",") if table.strip()
+                table.strip() for table in cli_tables.split(",") if table.strip()
             ]
             logger.info(f"Using CLI-provided tables: {updated_tables}")
         else:
-            last_checked = get_last_checked()
-            logger.info(f"Last checked: {last_checked}")
-
-            updated_tables = get_updated_tables(last_checked)
-            logger.info(f"Updated tables: {updated_tables}")
+            stored_hashes = get_table_hashes()
+            updated_tables = determine_updated_tables(stored_hashes, current_hashes)
+            logger.info(f"Tables with changed hashes: {updated_tables}")
 
         if not updated_tables:
             logger.info("No updated tables found.")
@@ -133,11 +138,24 @@ def _main_logic(tables: Optional[str] = None) -> None:
         else:
             logger.info("No new feature services to publish.")
 
-        # Update the last checked timestamp after successful processing
-        # Only update if we used change detection (not CLI tables)
-        if not tables:
-            current_time = datetime.now()
-            set_last_checked(current_time)
+        # Persist hashes for successfully processed tables
+        if not cli_tables:
+            # Automatic mode: only persist for tables we actually processed (existing + new)
+            for table in (
+                updated_tables_with_existing_services
+                + updated_tables_without_existing_services
+            ):
+                set_table_hash(table, current_hashes[table])
+        else:
+            # CLI mode: still update hashes so future automatic runs skip them
+            # We only have current_hashes if we computed them; recompute minimal set
+            # For simplicity and low volume we pull all current hashes.
+            for table in (
+                updated_tables_with_existing_services
+                + updated_tables_without_existing_services
+            ):
+                if table in current_hashes:
+                    set_table_hash(table, current_hashes[table])
 
     except Exception as e:
         # Record the global error in the summary
