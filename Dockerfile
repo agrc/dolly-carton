@@ -30,12 +30,28 @@ RUN apt-get update \
 FROM base AS dev_container
 
 ENV APP_ENVIRONMENT=dev
+ENV GOOGLE_CLOUD_PROJECT=demo-test
+ENV FIRESTORE_EMULATOR_HOST=127.0.0.1:8080
 
 # Install zsh and oh-my-zsh for better terminal experience
 RUN apt-get update && apt-get install -y \
     git \
     zsh \
     curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# install node 22 (required for firebase emulator)
+RUN apt-get update && apt-get install -y \
+    ca-certificates \
+    gnupg \
+    openjdk-17-jre-headless \
+    netcat-openbsd \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y nodejs \
+    && npm i -g firebase-tools \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Oh My Zsh for root user
@@ -46,6 +62,18 @@ RUN git clone https://github.com/zsh-users/zsh-autosuggestions /root/.oh-my-zsh/
 
 # Create proper .zshrc configuration
 RUN printf '# Path to your oh-my-zsh installation.\nexport ZSH="$HOME/.oh-my-zsh"\n\n# Set name of the theme to load\nZSH_THEME="robbyrussell"\n\n# Which plugins would you like to load?\nplugins=(git zsh-autosuggestions)\n\nsource $ZSH/oh-my-zsh.sh\n\n# History configuration\nHISTSIZE=10000\nSAVEHIST=10000\nHISTFILE=/root/.zsh_history\nsetopt HIST_IGNORE_DUPS\nsetopt HIST_FIND_NO_DUPS\nsetopt SHARE_HISTORY\nsetopt APPEND_HISTORY\n\n# Enable autosuggestions\nZSH_AUTOSUGGEST_HIGHLIGHT_STYLE="fg=#666666"\n' > /root/.zshrc
+
+# Auto-start Firestore emulator
+RUN printf '\n# --- Firestore emulator auto-start ---\n' >> /root/.zshrc \
+    && printf 'if command -v firebase >/dev/null 2>&1; then\n' >> /root/.zshrc \
+    && printf '  if ! nc -z 127.0.0.1 8080 >/dev/null 2>&1; then\n' >> /root/.zshrc \
+    && printf '    echo "Starting Firestore emulator on $FIRESTORE_EMULATOR_HOST (project: $GOOGLE_CLOUD_PROJECT)..."\n' >> /root/.zshrc \
+    && printf '    nohup firebase emulators:start --only firestore --project "$GOOGLE_CLOUD_PROJECT" >/tmp/firebase-emulator.log 2>&1 &\n' >> /root/.zshrc \
+    && printf '  fi\n' >> /root/.zshrc \
+    && printf 'fi\n' >> /root/.zshrc
+
+# Expose Firestore emulator API and UI ports
+EXPOSE 8080 4000 4400
 
 # Set zsh as the default shell
 RUN chsh -s $(which zsh)
@@ -63,7 +91,16 @@ WORKDIR /app
 RUN cp /app/src/dolly/secrets/secrets_template.json /app/src/dolly/secrets/secrets.json
 
 # use -e so that the secrets file will be used in the tests
-RUN pip install -e .[tests] --break-system-packages
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates gnupg openjdk-17-jre-headless \
+    && install -m 0755 -d /etc/apt/keyrings \
+    && curl -fsSL https://deb.nodesource.com/gpgkey/nodesource-repo.gpg.key | gpg --dearmor -o /etc/apt/keyrings/nodesource.gpg \
+    && echo "deb [signed-by=/etc/apt/keyrings/nodesource.gpg] https://deb.nodesource.com/node_22.x nodistro main" > /etc/apt/sources.list.d/nodesource.list \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends nodejs \
+    && npm i -g firebase-tools \
+    && rm -rf /var/lib/apt/lists/* \
+    && pip install -e .[tests] --break-system-packages
 
 
 FROM base AS prod
