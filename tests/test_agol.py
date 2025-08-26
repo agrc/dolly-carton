@@ -752,6 +752,7 @@ class TestZipAndUploadFgdb:
 class TestUpdateFeatureServices:
     """Test cases for the update_feature_services function."""
 
+    @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.retry")
     @patch("dolly.agol.get_service_from_title")
     @patch("dolly.agol._append_new_data_to_service")
@@ -770,6 +771,7 @@ class TestUpdateFeatureServices:
         mock_append,
         mock_get_service_from_title,
         mock_retry,
+        mock_set_table_hash,
     ):
         """Test successful update of feature services."""
         # Setup mocks
@@ -780,6 +782,10 @@ class TestUpdateFeatureServices:
         mock_gdb_item.id = "gdb-item-id"
 
         tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        current_hashes = {
+            "sgid.society.cemeteries": "hash1",
+            "sgid.transportation.roads": "hash2",
+        }
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
             "sgid.transportation.roads": {"published_name": "Utah Roads"},
@@ -799,7 +805,9 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+        update_feature_services(
+            mock_gdb_item, tables, agol_items_lookup, current_hashes
+        )
 
         # Verify all services were processed
         assert mock_get_service_item.call_count == 2
@@ -823,6 +831,7 @@ class TestUpdateFeatureServices:
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -831,7 +840,9 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+        update_feature_services(
+            mock_gdb_item, tables, agol_items_lookup, current_hashes
+        )
 
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
@@ -848,6 +859,7 @@ class TestUpdateFeatureServices:
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -857,7 +869,9 @@ class TestUpdateFeatureServices:
         from dolly.agol import update_feature_services
 
         # Call without providing gis_connection (None by default)
-        update_feature_services(mock_gdb_item, tables, agol_items_lookup, None)
+        update_feature_services(
+            mock_gdb_item, tables, agol_items_lookup, current_hashes
+        )
 
         # Verify _get_gis_connection was called
         mock_get_gis.assert_called_once()
@@ -888,6 +902,7 @@ class TestUpdateFeatureServices:
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -904,7 +919,9 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+        update_feature_services(
+            mock_gdb_item, tables, agol_items_lookup, current_hashes
+        )
 
         # Verify append was called and returned False
         mock_append.assert_called_once()
@@ -932,6 +949,7 @@ class TestUpdateFeatureServices:
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -942,7 +960,9 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(mock_gdb_item, tables, agol_items_lookup)
+        update_feature_services(
+            mock_gdb_item, tables, agol_items_lookup, current_hashes
+        )
 
         # Should log the error
         mock_logger.error.assert_called_once()
@@ -1130,6 +1150,7 @@ class TestConfigurePublishedService:
 class TestPublishNewFeatureServices:
     """Test cases for the publish_new_feature_services function."""
 
+    @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.update_agol_item")
     @patch("dolly.agol._configure_published_service")
     @patch("dolly.agol._create_and_publish_service")
@@ -1142,6 +1163,7 @@ class TestPublishNewFeatureServices:
         mock_create_publish,
         mock_configure,
         mock_update_agol_item,
+        mock_set_table_hash,
     ):
         """Test successful publishing of new feature services."""
         # Setup mocks
@@ -1149,6 +1171,10 @@ class TestPublishNewFeatureServices:
         mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        current_hashes = {
+            "sgid.society.cemeteries": "hash1",
+            "sgid.transportation.roads": "hash2",
+        }
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
             "sgid.transportation.roads": {"published_name": "Utah Roads"},
@@ -1164,7 +1190,7 @@ class TestPublishNewFeatureServices:
 
         from dolly.agol import publish_new_feature_services
 
-        publish_new_feature_services(tables, agol_items_lookup)
+        publish_new_feature_services(tables, agol_items_lookup, current_hashes)
 
         # Verify all tables were processed
         assert mock_create_publish.call_count == 2
@@ -1193,6 +1219,7 @@ class TestPublishNewFeatureServices:
         mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -1201,7 +1228,7 @@ class TestPublishNewFeatureServices:
 
         from dolly.agol import publish_new_feature_services
 
-        publish_new_feature_services(tables, agol_items_lookup)
+        publish_new_feature_services(tables, agol_items_lookup, current_hashes)
 
         # Should continue processing even if creation fails
         mock_create_publish.assert_called_once()
@@ -1217,6 +1244,7 @@ class TestPublishNewFeatureServices:
         mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries"]
+        current_hashes = {"sgid.society.cemeteries": "hash1"}
         agol_items_lookup = {
             "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"}
         }
@@ -1227,7 +1255,9 @@ class TestPublishNewFeatureServices:
 
         from dolly.agol import publish_new_feature_services
 
-        publish_new_feature_services(tables, agol_items_lookup, mock_gis)
+        publish_new_feature_services(
+            tables, agol_items_lookup, current_hashes, mock_gis
+        )
 
         # Should continue processing even if configuration fails
         mock_configure.assert_called_once()
