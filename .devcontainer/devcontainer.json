@@ -6,7 +6,8 @@
   },
   "mounts": [
     "source=${localWorkspaceFolder}/output,target=${containerWorkspaceFolder}/output,type=bind,consistency=cached",
-    "source=dolly-carton-zsh-history,target=/root/.zsh_history,type=volume"
+    "source=dolly-carton-zsh-history,target=/root/.zsh_history,type=volume",
+    "source=${localEnv:HOME}/.config/gcloud,target=/root/.config/gcloud,type=bind,readonly"
   ],
   "customizations": {
     "vscode": {
