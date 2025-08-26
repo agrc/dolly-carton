@@ -249,7 +249,6 @@ class TestMain:
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.set_table_hash")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
@@ -266,7 +265,6 @@ class TestMain:
         mock_get_table_hashes,
         mock_determine_updated,
         mock_get_current_hashes,
-        mock_set_table_hash,
         mock_precisedelta,
         mock_time,
     ):
@@ -283,7 +281,6 @@ class TestMain:
         mock_logger.info.assert_any_call(
             "skipping sgid.unknown.table since it does not show up in the agol items lookup"
         )
-        mock_set_table_hash.assert_not_called()
 
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
