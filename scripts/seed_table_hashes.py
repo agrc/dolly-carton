@@ -10,8 +10,7 @@ from dolly.state import get_table_hashes, set_table_hash
 
 # Set environment to prod to pull from firestore and get correct secrets
 os.environ["APP_ENVIRONMENT"] = "prod"
-os.environ["GOOGLE_CLOUD_PROJECT"] = "ut-dts-ugrc-dolly-carton-dev"
-del os.environ["FIRESTORE_EMULATOR_HOST"]
+os.environ.pop("FIRESTORE_EMULATOR_HOST", None)
 
 LAST_CHECKED = "2025-08-21"
 host = secrets["INTERNAL_HOST"]
