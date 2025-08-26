@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.3](https://github.com/agrc/dolly-carton/compare/v1.0.2...v1.0.3) (2025-08-26)
+
+
+### Features
+
+* switch to table-level change detection ([eef712c](https://github.com/agrc/dolly-carton/commit/eef712c0a69bd8bfd106dbfacc5f733cf275c559)), closes [#7](https://github.com/agrc/dolly-carton/issues/7)
+
+
+### Bug Fixes
+
+* update table hashes after each successful operation ([007293d](https://github.com/agrc/dolly-carton/commit/007293d9ee4be81d7a362fce2a6043a7a1e32da9))
+
 ## [1.0.2](https://github.com/agrc/dolly-carton/compare/v1.0.1...v1.0.2) (2025-08-21)
 
 
