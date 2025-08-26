@@ -59,7 +59,6 @@ class TestMain:
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.set_table_hash")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
@@ -82,7 +81,6 @@ class TestMain:
         mock_get_table_hashes,
         mock_determine_updated,
         mock_get_current_hashes,
-        mock_set_table_hash,
         mock_precisedelta,
         mock_time,
     ):
@@ -99,14 +97,12 @@ class TestMain:
         _main_logic()
 
         mock_update_feature_services.assert_called_once()
-        mock_set_table_hash.assert_called_once_with("sgid.society.cemeteries", "h1")
         mock_logger.info.assert_any_call(
             "Updating existing feature services for tables: ['sgid.society.cemeteries']"
         )
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.set_table_hash")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
@@ -125,7 +121,6 @@ class TestMain:
         mock_get_table_hashes,
         mock_determine_updated,
         mock_get_current_hashes,
-        mock_set_table_hash,
         mock_precisedelta,
         mock_time,
     ):
@@ -140,11 +135,9 @@ class TestMain:
         _main_logic()
 
         mock_publish_new_feature_services.assert_called_once()
-        mock_set_table_hash.assert_called_once_with("sgid.transportation.roads", "h2")
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
-    @patch("dolly.main.set_table_hash")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
@@ -169,7 +162,6 @@ class TestMain:
         mock_get_table_hashes,
         mock_determine_updated,
         mock_get_current_hashes,
-        mock_set_table_hash,
         mock_precisedelta,
         mock_time,
     ):
@@ -193,8 +185,6 @@ class TestMain:
 
         mock_update_feature_services.assert_called_once()
         mock_publish_new_feature_services.assert_called_once()
-        # Two successful tables => two hash updates (order not guaranteed)
-        assert mock_set_table_hash.call_count == 2
 
     @patch("dolly.main.time.time")
     @patch("dolly.main.get_table_hashes")
@@ -300,7 +290,6 @@ class TestMain:
     @patch("dolly.main.zip_and_upload_fgdb")
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.set_table_hash")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
@@ -315,7 +304,6 @@ class TestMain:
         mock_get_table_hashes,
         mock_determine_updated,
         mock_get_current_hashes,
-        mock_set_table_hash,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
         mock_zip_and_upload_fgdb,
@@ -335,8 +323,6 @@ class TestMain:
 
         mock_get_table_hashes.assert_not_called()
         mock_determine_updated.assert_not_called()
-        # set_table_hash called for each processed table
-        assert mock_set_table_hash.call_count == 2
         mock_logger.info.assert_any_call(
             "Using CLI-provided tables: ['sgid.society.cemeteries', 'sgid.transportation.roads']"
         )

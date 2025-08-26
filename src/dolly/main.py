@@ -20,7 +20,7 @@ from dolly.internal import (
     get_agol_items_lookup,
     get_current_hashes,
 )
-from dolly.state import get_table_hashes, set_table_hash
+from dolly.state import get_table_hashes
 from dolly.summary import finish_summary, start_summary
 from dolly.utils import OUTPUT_PATH, get_secrets
 
@@ -126,6 +126,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 gdb_item,
                 updated_tables_with_existing_services,
                 agol_items_lookup,
+                current_hashes,
             )
         else:
             logger.info("No existing feature services to update.")
@@ -134,28 +135,10 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
             publish_new_feature_services(
                 updated_tables_without_existing_services,
                 agol_items_lookup,
+                current_hashes,
             )
         else:
             logger.info("No new feature services to publish.")
-
-        # Persist hashes for successfully processed tables
-        if not cli_tables:
-            # Automatic mode: only persist for tables we actually processed (existing + new)
-            for table in (
-                updated_tables_with_existing_services
-                + updated_tables_without_existing_services
-            ):
-                set_table_hash(table, current_hashes[table])
-        else:
-            # CLI mode: still update hashes so future automatic runs skip them
-            # We only have current_hashes if we computed them; recompute minimal set
-            # For simplicity and low volume we pull all current hashes.
-            for table in (
-                updated_tables_with_existing_services
-                + updated_tables_without_existing_services
-            ):
-                if table in current_hashes:
-                    set_table_hash(table, current_hashes[table])
 
     except Exception as e:
         # Record the global error in the summary

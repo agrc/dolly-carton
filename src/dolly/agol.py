@@ -8,6 +8,7 @@ from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
 from arcgis.gis import GIS, Item
 
 from dolly.internal import create_fgdb, update_agol_item
+from dolly.state import set_table_hash
 from dolly.summary import get_current_summary
 from dolly.utils import get_secrets, get_service_from_title, retry
 
@@ -347,6 +348,7 @@ def update_feature_services(
     gdb_item: Item,
     tables: list[str],
     agol_items_lookup: dict[str, dict],
+    current_hashes: dict[str, str],
     gis_connection: GIS | None = None,
 ) -> None:
     """
@@ -403,6 +405,7 @@ def update_feature_services(
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
                     summary.add_table_updated(table)
+                set_table_hash(table, current_hashes[table])
         except Exception as e:
             logger.error(
                 f"Failed to update feature service for {table}: {e}", exc_info=True
@@ -521,6 +524,7 @@ def _configure_published_service(
 def publish_new_feature_services(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
+    current_hashes: dict[str, str],
     gis_connection: GIS | None = None,
 ) -> None:
     """
@@ -560,6 +564,7 @@ def publish_new_feature_services(
         logger.info(f"Published new feature service for {table} with item ID {item.id}")
         if summary:
             summary.add_table_published(table)
+        set_table_hash(table, current_hashes[table])
 
         # Update the internal database with the new item ID
         update_agol_item(table, item.id)
