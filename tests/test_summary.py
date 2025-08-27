@@ -555,7 +555,11 @@ class TestSlackIntegration:
 
             # Should contain GCP logs link
             assert "GCP Logs" in message_str
-            assert "console.cloud.google.com" in message_str
+            # Find URLs in the message, and check for proper console.cloud.google.com hostname
+            import re
+            from urllib.parse import urlparse
+            urls = re.findall(r'https?://[^\s\]>]+', message_str)
+            assert any(urlparse(u).hostname == "console.cloud.google.com" for u in urls)
 
     def test_post_to_slack_multiple_blocks(self):
         """Test posting to Slack when message exceeds block limit."""
