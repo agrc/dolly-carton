@@ -150,13 +150,13 @@ class ProcessSummary:
         logger.info("=" * 80)
 
     def _create_item_text(
-        self, item: str, item_id: str | None, prefix: str = "•", title: str = ""
+        self, text: str, item_id: str | None, prefix: str = "•", title: str = ""
     ) -> str:
         """
         Create text for an item, with optional AGOL link.
 
         Args:
-            item: Item text (table name or error message)
+            text: Text content (table name or error message)
             item_id: Optional AGOL item ID for creating links
             prefix: Prefix for the item (default: "•")
             title: Section title for determining if this is an error context
@@ -167,13 +167,13 @@ class ProcessSummary:
         if item_id:
             # Create Slack link format: <URL|text>
             agol_url = f"https://utah.maps.arcgis.com/home/item.html?id={item_id}"
-            return f"{prefix} <{agol_url}|`{item}`>\n"
+            return f"{prefix} <{agol_url}|`{text}`>\n"
         else:
             # For error messages, don't use backticks; for table names, use backticks
-            if ":" in item and ("Error" in title or "error" in item.lower()):
-                return f"{prefix} {item}\n"
+            if ":" in text and ("Error" in title or "error" in text.lower()):
+                return f"{prefix} {text}\n"
             else:
-                return f"{prefix} `{item}`\n"
+                return f"{prefix} `{text}`\n"
 
     def _create_text_blocks_with_limit(
         self,
@@ -207,8 +207,10 @@ class ProcessSummary:
         current_items = []
         current_length = len(title) + 10  # Buffer for formatting
 
-        for item, item_id in zip(items, item_ids):
-            item_text = self._create_item_text(item, item_id, prefix, title)
+        for item_text_content, item_id in zip(items, item_ids):
+            item_text = self._create_item_text(
+                item_text_content, item_id, prefix, title
+            )
             item_length = len(item_text)
 
             # If adding this item would exceed the limit, create a block with current items
@@ -250,7 +252,6 @@ class ProcessSummary:
             )
 
         return blocks
-
 
     def format_slack_message(self) -> dict:
         """
