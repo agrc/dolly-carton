@@ -42,23 +42,23 @@ class ProcessSummary:
     start_time: float = 0.0
     end_time: float = 0.0
 
-    def add_table_updated(self, table: str, item_id: str | None = None) -> None:
+    def add_table_updated(self, table: str, item_id: str | None) -> None:
         """Add a table that was successfully updated.
 
         Args:
             table: Table name
-            item_id: Optional AGOL item ID for linking (primarily for Slack integration)
+            item_id: AGOL item ID for linking (can be None if no item exists)
         """
         if table not in self.tables_updated:
             self.tables_updated.append(table)
             self.updated_item_ids.append(item_id)
 
-    def add_table_published(self, table: str, item_id: str | None = None) -> None:
+    def add_table_published(self, table: str, item_id: str | None) -> None:
         """Add a table that was successfully published.
 
         Args:
             table: Table name
-            item_id: Optional AGOL item ID for linking (primarily for Slack integration)
+            item_id: AGOL item ID for linking (can be None if no item exists)
         """
         if table not in self.tables_published:
             self.tables_published.append(table)
