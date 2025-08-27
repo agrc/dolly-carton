@@ -29,6 +29,10 @@ class ProcessSummary:
     tables_published: List[str] = field(default_factory=list)
     tables_with_errors: List[str] = field(default_factory=list)
 
+    # AGOL item IDs for linking (parallel arrays to tables_updated/published)
+    updated_item_ids: List[str | None] = field(default_factory=list)
+    published_item_ids: List[str | None] = field(default_factory=list)
+
     # Error details
     update_errors: List[str] = field(default_factory=list)
     publish_errors: List[str] = field(default_factory=list)
@@ -38,15 +42,27 @@ class ProcessSummary:
     start_time: float = 0.0
     end_time: float = 0.0
 
-    def add_table_updated(self, table: str) -> None:
-        """Add a table that was successfully updated."""
+    def add_table_updated(self, table: str, item_id: str | None = None) -> None:
+        """Add a table that was successfully updated.
+
+        Args:
+            table: Table name
+            item_id: Optional AGOL item ID for linking (primarily for Slack integration)
+        """
         if table not in self.tables_updated:
             self.tables_updated.append(table)
+            self.updated_item_ids.append(item_id)
 
-    def add_table_published(self, table: str) -> None:
-        """Add a table that was successfully published."""
+    def add_table_published(self, table: str, item_id: str | None = None) -> None:
+        """Add a table that was successfully published.
+
+        Args:
+            table: Table name
+            item_id: Optional AGOL item ID for linking (primarily for Slack integration)
+        """
         if table not in self.tables_published:
             self.tables_published.append(table)
+            self.published_item_ids.append(item_id)
 
     def add_table_error(self, table: str, error_type: str, error_message: str) -> None:
         """Add a table that encountered an error during processing."""
@@ -132,6 +148,100 @@ class ProcessSummary:
             logger.info("🔵 No tables required processing")
 
         logger.info("=" * 80)
+
+    def _create_table_item_text(
+        self, table: str, item_id: str | None, prefix: str = "•"
+    ) -> str:
+        """
+        Create text for a table item, with optional AGOL link.
+
+        Args:
+            table: Table name
+            item_id: Optional AGOL item ID for creating links
+            prefix: Prefix for the item (default: "•")
+
+        Returns:
+            Formatted text string for the table item
+        """
+        if item_id:
+            # Create Slack link format: <URL|text>
+            agol_url = f"https://utah.maps.arcgis.com/home/item.html?id={item_id}"
+            return f"{prefix} <{agol_url}|`{table}`>\n"
+        else:
+            # Fallback to plain text with backticks
+            return f"{prefix} `{table}`\n"
+
+    def _create_text_blocks_with_limit_for_tables(
+        self,
+        title: str,
+        tables: List[str],
+        item_ids: List[str | None],
+        prefix: str = "•",
+        max_chars: int = 2800,
+    ) -> List[dict]:
+        """
+        Create multiple blocks for tables with optional AGOL links if content exceeds character limit.
+
+        Args:
+            title: Section title (e.g., "✅ *Updated Tables*")
+            tables: List of table names to include
+            item_ids: List of corresponding AGOL item IDs (can be None)
+            prefix: Prefix for each item (default: "•")
+            max_chars: Maximum characters per block (leaving buffer for title and formatting)
+
+        Returns:
+            List of block dictionaries
+        """
+        if not tables:
+            return []
+
+        blocks = []
+        current_items = []
+        current_length = len(title) + 10  # Buffer for formatting
+
+        for table, item_id in zip(tables, item_ids):
+            item_text = self._create_table_item_text(table, item_id, prefix)
+            item_length = len(item_text)
+
+            # If adding this item would exceed the limit, create a block with current items
+            if current_length + item_length > max_chars and current_items:
+                item_list = "".join(current_items).rstrip()
+                blocks.append(
+                    {
+                        "type": "section",
+                        "text": {
+                            "type": "mrkdwn",
+                            "text": f"{title}\n{item_list}",
+                        },
+                    }
+                )
+                current_items = []
+                current_length = len(title) + 10
+                # Update title for continuation blocks
+                if "*(continued)*" not in title:
+                    # Find the last asterisk and insert (continued) before it
+                    if title.endswith("*"):
+                        title = title[:-1] + "*(continued)*"
+                    else:
+                        title = title + "*(continued)*"
+
+            current_items.append(item_text)
+            current_length += item_length
+
+        # Add the remaining items
+        if current_items:
+            item_list = "".join(current_items).rstrip()
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"{title}\n{item_list}",
+                    },
+                }
+            )
+
+        return blocks
 
     def _create_text_blocks_with_limit(
         self, title: str, items: List[str], prefix: str = "•", max_chars: int = 2800
@@ -312,15 +422,15 @@ class ProcessSummary:
 
         # Updated tables section
         if self.tables_updated:
-            updated_blocks = self._create_text_blocks_with_limit(
-                "✅ *Updated Tables*", self.tables_updated
+            updated_blocks = self._create_text_blocks_with_limit_for_tables(
+                "✅ *Updated Tables*", self.tables_updated, self.updated_item_ids
             )
             blocks.extend(updated_blocks)
 
         # Published tables section
         if self.tables_published:
-            published_blocks = self._create_text_blocks_with_limit(
-                "🚀 *Published Tables*", self.tables_published
+            published_blocks = self._create_text_blocks_with_limit_for_tables(
+                "🚀 *Published Tables*", self.tables_published, self.published_item_ids
             )
             blocks.extend(published_blocks)
 
