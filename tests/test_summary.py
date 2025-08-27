@@ -36,26 +36,26 @@ class TestProcessSummary:
         """Test adding updated tables."""
         summary = ProcessSummary()
 
-        summary.add_table_updated("sgid.test.table1")
-        summary.add_table_updated("sgid.test.table2")
+        summary.add_table_updated("sgid.test.table1", None)
+        summary.add_table_updated("sgid.test.table2", None)
 
         assert summary.tables_updated == ["sgid.test.table1", "sgid.test.table2"]
 
         # Test that duplicates are not added
-        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
         assert summary.tables_updated == ["sgid.test.table1", "sgid.test.table2"]
 
     def test_add_table_published(self):
         """Test adding published tables."""
         summary = ProcessSummary()
 
-        summary.add_table_published("sgid.test.table1")
-        summary.add_table_published("sgid.test.table2")
+        summary.add_table_published("sgid.test.table1", None)
+        summary.add_table_published("sgid.test.table2", None)
 
         assert summary.tables_published == ["sgid.test.table1", "sgid.test.table2"]
 
         # Test that duplicates are not added
-        summary.add_table_published("sgid.test.table1")
+        summary.add_table_published("sgid.test.table1", None)
         assert summary.tables_published == ["sgid.test.table1", "sgid.test.table2"]
 
     def test_add_table_error(self):
@@ -96,7 +96,7 @@ class TestProcessSummary:
         summary.add_table_updated(
             "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
         )
-        summary.add_table_updated("sgid.test.table2")  # No item_id
+        summary.add_table_updated("sgid.test.table2", None)  # No item_id
         summary.add_table_updated(
             "sgid.test.table3", "abcd1234567890123456789012345678"
         )
@@ -124,7 +124,7 @@ class TestProcessSummary:
         summary.add_table_published(
             "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
         )
-        summary.add_table_published("sgid.test.table2")  # No item_id
+        summary.add_table_published("sgid.test.table2", None)  # No item_id
         summary.add_table_published(
             "sgid.test.table3", "abcd1234567890123456789012345678"
         )
@@ -188,8 +188,8 @@ class TestProcessSummary:
         summary = ProcessSummary()
         summary.start_time = 1000.0
         summary.end_time = 1015.0
-        summary.add_table_updated("sgid.test.table1")
-        summary.add_table_published("sgid.test.table2")
+        summary.add_table_updated("sgid.test.table1", None)
+        summary.add_table_published("sgid.test.table2", None)
 
         summary.log_summary()
 
@@ -299,7 +299,7 @@ class TestSummaryGlobalFunctions:
 
         # Start a summary
         summary = start_summary(start_time)
-        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
 
         # Finish it
         finish_summary(end_time)
@@ -327,8 +327,8 @@ class TestSlackIntegration:
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
-        summary.add_table_updated("sgid.test.table1")
-        summary.add_table_published("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
+        summary.add_table_published("sgid.test.table1", None)
 
         message = summary.format_slack_message()
 
@@ -542,7 +542,7 @@ class TestSlackIntegration:
         summary.add_table_updated(
             "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
         )
-        summary.add_table_updated("sgid.test.table2")  # No item_id
+        summary.add_table_updated("sgid.test.table2", None)  # No item_id
         summary.add_table_published(
             "sgid.test.table3", "abcd1234567890123456789012345678"
         )
