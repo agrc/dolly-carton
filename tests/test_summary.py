@@ -24,6 +24,8 @@ class TestProcessSummary:
         assert summary.tables_updated == []
         assert summary.tables_published == []
         assert summary.tables_with_errors == []
+        assert summary.updated_item_ids == []
+        assert summary.published_item_ids == []
         assert summary.update_errors == []
         assert summary.publish_errors == []
         assert summary.global_errors == []
@@ -86,6 +88,85 @@ class TestProcessSummary:
             "ValueError: Invalid configuration",
             "ConnectionError: Database unavailable",
         ]
+
+    def test_add_table_updated_with_item_id(self):
+        """Test adding updated tables with AGOL item IDs."""
+        summary = ProcessSummary()
+
+        summary.add_table_updated(
+            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
+        )
+        summary.add_table_updated("sgid.test.table2")  # No item_id
+        summary.add_table_updated(
+            "sgid.test.table3", "abcd1234567890123456789012345678"
+        )
+
+        assert summary.tables_updated == [
+            "sgid.test.table1",
+            "sgid.test.table2",
+            "sgid.test.table3",
+        ]
+        assert summary.updated_item_ids == [
+            "583c0f4888d44f0a90791282b2a69829",
+            None,
+            "abcd1234567890123456789012345678",
+        ]
+
+        # Test that duplicates are not added
+        summary.add_table_updated("sgid.test.table1", "different_id")
+        assert len(summary.tables_updated) == 3
+        assert len(summary.updated_item_ids) == 3
+
+    def test_add_table_published_with_item_id(self):
+        """Test adding published tables with AGOL item IDs."""
+        summary = ProcessSummary()
+
+        summary.add_table_published(
+            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
+        )
+        summary.add_table_published("sgid.test.table2")  # No item_id
+        summary.add_table_published(
+            "sgid.test.table3", "abcd1234567890123456789012345678"
+        )
+
+        assert summary.tables_published == [
+            "sgid.test.table1",
+            "sgid.test.table2",
+            "sgid.test.table3",
+        ]
+        assert summary.published_item_ids == [
+            "583c0f4888d44f0a90791282b2a69829",
+            None,
+            "abcd1234567890123456789012345678",
+        ]
+
+        # Test that duplicates are not added
+        summary.add_table_published("sgid.test.table1", "different_id")
+        assert len(summary.tables_published) == 3
+        assert len(summary.published_item_ids) == 3
+
+    def test_create_table_item_text_with_link(self):
+        """Test _create_table_item_text method with AGOL item ID."""
+        summary = ProcessSummary()
+
+        # Test with item_id - should create a link
+        result = summary._create_table_item_text(
+            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
+        )
+        expected = "• <https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829|`sgid.test.table1`>\n"
+        assert result == expected
+
+        # Test without item_id - should fall back to plain text
+        result = summary._create_table_item_text("sgid.test.table2", None)
+        expected = "• `sgid.test.table2`\n"
+        assert result == expected
+
+        # Test with custom prefix
+        result = summary._create_table_item_text(
+            "sgid.test.table3", "abcd1234567890123456789012345678", prefix="✓"
+        )
+        expected = "✓ <https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678|`sgid.test.table3`>\n"
+        assert result == expected
 
     def test_get_total_elapsed_time(self):
         """Test elapsed time calculation."""
@@ -452,3 +533,48 @@ class TestSlackIntegration:
         assert len(blocks) == 1
         assert "• table1: Connection timeout" in blocks[0]["text"]["text"]
         assert "• table2: Permission denied" in blocks[0]["text"]["text"]
+
+    def test_format_slack_message_with_agol_links(self):
+        """Test formatting Slack message with AGOL item links."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+        summary.add_table_updated(
+            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
+        )
+        summary.add_table_updated("sgid.test.table2")  # No item_id
+        summary.add_table_published(
+            "sgid.test.table3", "abcd1234567890123456789012345678"
+        )
+
+        message = summary.format_slack_message()
+
+        message_str = str(message)
+
+        # Check that links are created for tables with item_ids
+        assert (
+            "https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829"
+            in message_str
+        )
+        assert (
+            "https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678"
+            in message_str
+        )
+
+        # Check that the link format is correct
+        assert (
+            "<https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829|`sgid.test.table1`>"
+            in message_str
+        )
+        assert (
+            "<https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678|`sgid.test.table3`>"
+            in message_str
+        )
+
+        # Check that tables without item_ids still appear as plain text
+        assert "`sgid.test.table2`" in message_str
+
+        # Ensure the message structure is still correct
+        assert "🟢 *Status:* Process completed successfully" in message_str
+        assert "✅ *Updated Tables*" in message_str
+        assert "🚀 *Published Tables*" in message_str

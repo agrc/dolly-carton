@@ -404,7 +404,8 @@ def update_feature_services(
             else:
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
-                    summary.add_table_updated(table)
+                    item_id = agol_items_lookup[table]["item_id"]
+                    summary.add_table_updated(table, item_id)
                 set_table_hash(table, current_hashes[table])
         except Exception as e:
             logger.error(
@@ -563,7 +564,7 @@ def publish_new_feature_services(
 
         logger.info(f"Published new feature service for {table} with item ID {item.id}")
         if summary:
-            summary.add_table_published(table)
+            summary.add_table_published(table, item.id)
         set_table_hash(table, current_hashes[table])
 
         # Update the internal database with the new item ID
