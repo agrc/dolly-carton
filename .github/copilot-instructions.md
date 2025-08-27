@@ -54,8 +54,8 @@ Dolly Carton is a Python CLI application for syncing SGID geospatial data from i
 - **Check linting**: `ruff check .` (takes <1 second)
 - **ALWAYS run these before committing** or CI will fail
 
-### Running the Application
-**In dev container**:
+### Application Commands (Reference Only)
+**For reference only - agents should NOT run these commands**:
 ```bash
 # Process all changed tables
 dolly
@@ -67,15 +67,16 @@ dolly --tables "sgid.society.cemeteries,sgid.boundaries.municipalities"
 dolly-cleanup-dev-agol
 ```
 
-**Outside dev container**: CLI commands WILL NOT WORK due to missing GDAL
+**Note**: These commands require GDAL and should only be run by human developers
 
 ## Validation Requirements
 
-### Manual Testing After Changes
-- **ALWAYS test at least one complete scenario after making changes**
-- **Start the Firebase emulator** (auto-starts in dev container)
-- **Run a dolly command** with test tables to ensure no crashes
-- **Verify log output** shows expected processing steps
+### Agent Testing Requirements
+- **Format and lint code**: Always run `ruff format .` and `ruff check .` before committing
+- **Run unit tests**: Execute `APP_ENVIRONMENT=dev pytest tests/test_utils.py tests/test_summary.py -v`
+- **Verify changes**: Use git diff to confirm only intended changes were made
+
+**Note**: Agents should NOT run dolly application commands. Unit tests and linting are sufficient for validation.
 
 ### CI Validation Steps
 - **ALWAYS run** `ruff format .` and `ruff check .` before committing
