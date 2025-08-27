@@ -106,6 +106,12 @@ dolly-cleanup-dev-agol
 - **Check**: `nc -z 127.0.0.1 8080` to verify emulator is running
 - **Manual start**: `firebase emulators:start --only firestore --project demo-test`
 
+### Firewall Warning for "metadata.google.internal"
+- **Warning**: "Firewall rules blocked me from connecting to metadata.google.internal"
+- **Cause**: Test code attempts to check if running in Google Cloud Platform by accessing GCP metadata server
+- **Expected**: This warning is normal and can be safely ignored when running tests locally
+- **Purpose**: The code uses this check to determine runtime environment (GCP vs local development)
+
 ## Important File Locations
 
 ### Key Source Files
