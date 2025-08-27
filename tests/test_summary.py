@@ -558,7 +558,8 @@ class TestSlackIntegration:
             # Find URLs in the message, and check for proper console.cloud.google.com hostname
             import re
             from urllib.parse import urlparse
-            urls = re.findall(r'https?://[^\s\]>]+', message_str)
+
+            urls = re.findall(r"https?://[^\s\]>]+", message_str)
             assert any(urlparse(u).hostname == "console.cloud.google.com" for u in urls)
 
     def test_post_to_slack_multiple_blocks(self):
@@ -707,7 +708,6 @@ class TestSlackIntegration:
             summary.add_table_updated(very_long_name, None)
 
         message = summary.format_slack_message()
-        message_str = str(message)
 
         # The test passes if the message is formatted successfully
         # (The continuation logic is complex and depends on exact character counts)
