@@ -145,27 +145,34 @@ class TestProcessSummary:
         assert len(summary.tables_published) == 3
         assert len(summary.published_item_ids) == 3
 
-    def test_create_table_item_text_with_link(self):
-        """Test _create_table_item_text method with AGOL item ID."""
+    def test_create_item_text_with_link(self):
+        """Test _create_item_text method with AGOL item ID."""
         summary = ProcessSummary()
 
         # Test with item_id - should create a link
-        result = summary._create_table_item_text(
-            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829"
+        result = summary._create_item_text(
+            "sgid.test.table1", "583c0f4888d44f0a90791282b2a69829", title="✅ *Updated Tables*"
         )
         expected = "• <https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829|`sgid.test.table1`>\n"
         assert result == expected
 
         # Test without item_id - should fall back to plain text
-        result = summary._create_table_item_text("sgid.test.table2", None)
+        result = summary._create_item_text("sgid.test.table2", None, title="✅ *Updated Tables*")
         expected = "• `sgid.test.table2`\n"
         assert result == expected
 
         # Test with custom prefix
-        result = summary._create_table_item_text(
-            "sgid.test.table3", "abcd1234567890123456789012345678", prefix="✓"
+        result = summary._create_item_text(
+            "sgid.test.table3", "abcd1234567890123456789012345678", prefix="✓", title="✅ *Updated Tables*"
         )
         expected = "✓ <https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678|`sgid.test.table3`>\n"
+        assert result == expected
+
+        # Test error message formatting
+        result = summary._create_item_text(
+            "table1: Connection timeout", None, title="*🔧 Update Error Details:*"
+        )
+        expected = "• table1: Connection timeout\n"
         assert result == expected
 
     def test_get_total_elapsed_time(self):
@@ -459,80 +466,6 @@ class TestSlackIntegration:
             finish_summary(start_time + 10)
 
             mock_post.assert_not_called()
-
-    def test_create_text_blocks_with_limit_single_block(self):
-        """Test _create_text_blocks_with_limit with content that fits in one block."""
-        summary = ProcessSummary()
-
-        # Test with short table names
-        items = ["table1", "table2", "table3"]
-        blocks = summary._create_text_blocks_with_limit("✅ *Updated Tables*", items)
-
-        assert len(blocks) == 1
-        assert blocks[0]["type"] == "section"
-        assert "✅ *Updated Tables*" in blocks[0]["text"]["text"]
-        assert "• `table1`" in blocks[0]["text"]["text"]
-        assert "• `table2`" in blocks[0]["text"]["text"]
-        assert "• `table3`" in blocks[0]["text"]["text"]
-
-    def test_create_text_blocks_with_limit_multiple_blocks(self):
-        """Test _create_text_blocks_with_limit with content that requires multiple blocks."""
-        summary = ProcessSummary()
-
-        # Create very long table names that will exceed the character limit
-        long_name_base = (
-            "very_long_schema_name.very_long_table_name_that_exceeds_character_limits"
-        )
-        items = [f"{long_name_base}_{i}" for i in range(50)]  # 50 long table names
-
-        blocks = summary._create_text_blocks_with_limit(
-            "✅ *Updated Tables*",
-            items,
-            max_chars=500,  # Force small limit for testing
-        )
-
-        # Should create multiple blocks
-        assert len(blocks) > 1
-
-        # Check that all blocks have the correct structure
-        for i, block in enumerate(blocks):
-            assert block["type"] == "section"
-            assert block["text"]["type"] == "mrkdwn"
-            if i == 0:
-                assert "✅ *Updated Tables*" in block["text"]["text"]
-            else:
-                assert "✅ *Updated Tables*(continued)*" in block["text"]["text"]
-
-        # Verify all items are included across blocks
-        all_text = " ".join([block["text"]["text"] for block in blocks])
-        for item in items:
-            assert f"• `{item}`" in all_text
-
-    def test_create_text_blocks_with_limit_empty_items(self):
-        """Test _create_text_blocks_with_limit with empty items list."""
-        summary = ProcessSummary()
-
-        blocks = summary._create_text_blocks_with_limit("✅ *Updated Tables*", [])
-
-        assert blocks == []
-
-    def test_create_text_blocks_with_limit_error_prefix(self):
-        """Test _create_text_blocks_with_limit with error messages using different prefix."""
-        summary = ProcessSummary()
-
-        error_messages = [
-            "table1: Connection timeout",
-            "table2: Permission denied",
-            "table3: Invalid schema",
-        ]
-
-        blocks = summary._create_text_blocks_with_limit(
-            "*🔧 Update Error Details:*", error_messages, prefix="•"
-        )
-
-        assert len(blocks) == 1
-        assert "• table1: Connection timeout" in blocks[0]["text"]["text"]
-        assert "• table2: Permission denied" in blocks[0]["text"]["text"]
 
     def test_format_slack_message_with_agol_links(self):
         """Test formatting Slack message with AGOL item links."""
