@@ -84,7 +84,7 @@ class TestFeatureCountIntegration:
 
     def test_feature_counting_function_interfaces(self):
         """Test that the feature counting function interfaces work as expected."""
-        from dolly.utils import (
+        from tests.test_helpers import (
             count_features_in_agol_service,
             count_features_in_fgdb_layer,
             count_features_in_internal_table,

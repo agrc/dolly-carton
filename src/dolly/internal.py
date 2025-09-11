@@ -291,7 +291,7 @@ def update_agol_item(
         connection.close()
 
 
-def _count_features_in_internal_table_impl(
+def _count_features_in_internal_table(
     table: str, connection: pyodbc.Connection | None = None
 ) -> int:
     """
@@ -333,7 +333,7 @@ def _count_features_in_internal_table_impl(
             connection.close()
 
 
-def _count_features_in_fgdb_layer_impl(fgdb_path, layer_name: str) -> int:
+def _count_features_in_fgdb_layer(fgdb_path, layer_name: str) -> int:
     """
     Count features in a File Geodatabase layer using GDAL.
 
@@ -408,7 +408,7 @@ def _copy_table_to_fgdb(
     table: str,
     output_path: Path,
     agol_item_info: dict,
-) -> tuple[bool, int]:
+) -> bool:
     """
     Copy a single table to FGDB using GDAL operations.
 
@@ -419,12 +419,9 @@ def _copy_table_to_fgdb(
         agol_item_info: AGOL item information dictionary
 
     Returns:
-        Tuple of (success_status, source_feature_count)
+        Success status boolean
     """
     logger.info(f"Copying layer {table} to FGDB.")
-
-    # Count features in source table
-    source_count = _count_features_in_internal_table_impl(table)
 
     try:
         gdal_options = _prepare_gdal_options(table, agol_item_info)
@@ -435,11 +432,11 @@ def _copy_table_to_fgdb(
 
         logger.info(f"Successfully copied layer {table} to FGDB.")
 
-        return True, source_count
+        return True
     except Exception as e:
         logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}", exc_info=True)
 
-        return False, source_count
+        return False
 
 
 def create_fgdb(
@@ -477,19 +474,22 @@ def create_fgdb(
         tables_copied = False
         source_counts = {}
         for table in tables:
-            success, source_count = _copy_table_to_fgdb(
+            # Count features in source table before copying
+            source_count = _count_features_in_internal_table(table)
+            if source_count >= 0:
+                logger.info(f"📊 Source table {table}: {source_count:,} features")
+                source_counts[table] = source_count
+
+            success = _copy_table_to_fgdb(
                 internal, table, output_gdb_path, agol_items_lookup[table]
             )
             if success:
                 tables_copied = True
-                source_counts[table] = source_count
 
                 # Count features in the created FGDB layer
                 title = agol_items_lookup[table]["published_name"]
                 layer_name = get_service_from_title(title)
-                fgdb_count = _count_features_in_fgdb_layer_impl(
-                    output_gdb_path, layer_name
-                )
+                fgdb_count = _count_features_in_fgdb_layer(output_gdb_path, layer_name)
                 if fgdb_count >= 0:
                     logger.info(f"📊 FGDB layer {layer_name}: {fgdb_count:,} features")
 

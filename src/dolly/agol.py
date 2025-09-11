@@ -241,7 +241,7 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS | None = None) -> I
     return _upload_item_to_agol(zip_path, title, tags, gis_connection)
 
 
-def _count_features_in_agol_service_impl(service_item) -> int:
+def _count_features_in_agol_service(service_item) -> int:
     """
     Count features in an ArcGIS Online service using the ArcGIS API.
 
@@ -410,7 +410,7 @@ def update_feature_services(
             logger.info(f"Updating feature service for {table} with new FGDB data.")
 
             # Count features before truncation
-            pre_truncate_count = _count_features_in_agol_service_impl(service_item)
+            pre_truncate_count = _count_features_in_agol_service(service_item)
             if pre_truncate_count >= 0:
                 logger.info(
                     f"📊 Target service {table} before truncation: {pre_truncate_count:,} features"
@@ -434,22 +434,29 @@ def update_feature_services(
                     summary.add_table_error(table, "update", error_msg)
             else:
                 # Count features after append and compare with source
-                post_append_count = _count_features_in_agol_service_impl(service_item)
+                post_append_count = _count_features_in_agol_service(service_item)
                 if post_append_count >= 0:
                     logger.info(
                         f"📊 Target service {table} after append: {post_append_count:,} features"
                     )
 
-                    # Check for count mismatch
-                    source_count = source_counts.get(table, -1)
-                    if source_count >= 0 and source_count != post_append_count:
+                    # Check for zero features (indicates a problem)
+                    if post_append_count == 0:
+                        error_msg = f"Target service {table} has 0 features after append - this may indicate a data loss issue"
+                        logger.error(f"📊 {error_msg}")
                         if summary:
-                            summary.add_feature_count_mismatch(
-                                table, source_count, post_append_count
+                            summary.add_table_error(table, "zero_features", error_msg)
+                    else:
+                        # Check for count mismatch with source
+                        source_count = source_counts.get(table, -1)
+                        if source_count >= 0 and source_count != post_append_count:
+                            if summary:
+                                summary.add_feature_count_mismatch(
+                                    table, source_count, post_append_count
+                                )
+                            logger.error(
+                                f"📊 Feature count mismatch for {table}: Source {source_count:,} != Final {post_append_count:,}"
                             )
-                        logger.error(
-                            f"📊 Feature count mismatch for {table}: Source {source_count:,} != Final {post_append_count:,}"
-                        )
 
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
