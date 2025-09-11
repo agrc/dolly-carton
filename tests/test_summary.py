@@ -182,6 +182,25 @@ class TestProcessSummary:
         expected = "• table1: Connection timeout\n"
         assert result == expected
 
+    def test_add_feature_count_mismatch(self):
+        """Test adding feature count mismatches."""
+        summary = ProcessSummary()
+
+        summary.add_feature_count_mismatch("sgid.test.table1", 1000, 999)
+        summary.add_feature_count_mismatch("sgid.test.table2", 500, 501)
+
+        # Feature count mismatches should be added as table errors
+        assert "sgid.test.table1" in summary.tables_with_errors
+        assert "sgid.test.table2" in summary.tables_with_errors
+        assert any(
+            "Feature count mismatch: 1000 -> 999" in error
+            for error in summary.update_errors
+        )
+        assert any(
+            "Feature count mismatch: 500 -> 501" in error
+            for error in summary.update_errors
+        )
+
     def test_get_total_elapsed_time(self):
         """Test elapsed time calculation."""
         summary = ProcessSummary()
@@ -284,6 +303,23 @@ class TestProcessSummary:
         mock_logger.info.assert_any_call("🚨 Global errors: 1")
         # Global errors take precedence in overall status
         mock_logger.info.assert_any_call("🔴 Process failed due to global errors")
+
+    @patch("dolly.summary.logger")
+    def test_log_summary_with_feature_count_mismatches(self, mock_logger):
+        """Test log_summary with feature count mismatches."""
+        summary = ProcessSummary()
+        summary.add_table_updated("sgid.test.table1", None)
+        summary.add_feature_count_mismatch("sgid.test.table1", 1000, 999)
+
+        summary.log_summary()
+
+        # Feature count mismatches should appear in update errors
+        mock_logger.info.assert_any_call("📝 Update errors:")
+        mock_logger.info.assert_any_call(
+            "   • sgid.test.table1: Feature count mismatch: 1000 -> 999"
+        )
+        # Feature count mismatches should result in error status
+        mock_logger.info.assert_any_call("🟡 Process completed with errors")
 
 
 class TestSummaryGlobalFunctions:
@@ -403,6 +439,26 @@ class TestSlackIntegration:
         assert "🚨 *Global Errors (Process Failed):*" in message_str
         assert "ValueError: Invalid configuration" in message_str
         assert "ConnectionError: Database unavailable" in message_str
+
+    def test_format_slack_message_with_feature_count_mismatches(self):
+        """Test formatting Slack message with feature count mismatches."""
+        summary = ProcessSummary()
+        summary.add_table_updated("sgid.test.table1", None)
+        summary.add_feature_count_mismatch("sgid.test.table1", 1000, 999)
+        summary.add_feature_count_mismatch("sgid.test.table2", 500, 501)
+
+        message = summary.format_slack_message()
+        message_str = str(message)
+
+        # Check status shows errors due to mismatches
+        assert "🟡" in message_str
+        assert "completed with errors" in message_str
+        # Check that mismatches appear in update errors
+        assert "*🔧 Update Error Details:*" in message_str
+        assert "Feature count mismatch: 1000 -> 999" in message_str
+        assert "Feature count mismatch: 500 -> 501" in message_str
+        # Ensure separate feature count mismatches section is NOT present
+        assert "📊 *Feature Count Mismatches:*" not in message_str
 
     @patch("dolly.summary.requests.post")
     def test_post_to_slack_success(self, mock_post):
@@ -690,7 +746,7 @@ class TestSlackIntegration:
         summary = ProcessSummary()
 
         # Test with empty items list
-        blocks = summary._create_text_blocks_with_limit("Test Title", [], None, "•")
+        blocks = summary._create_text_blocks_with_limit("Test Title", [], [], "•")
 
         assert blocks == []
 

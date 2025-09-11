@@ -116,7 +116,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 f"Updating existing feature services for tables: {updated_tables_with_existing_services}"
             )
 
-            fgdb_path = create_fgdb(
+            fgdb_path, source_counts = create_fgdb(
                 updated_tables_with_existing_services,
                 agol_items_lookup,
             )
@@ -127,6 +127,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 updated_tables_with_existing_services,
                 agol_items_lookup,
                 current_hashes,
+                source_counts,
             )
         else:
             logger.info("No existing feature services to update.")
