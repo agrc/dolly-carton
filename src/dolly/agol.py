@@ -241,6 +241,27 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS | None = None) -> I
     return _upload_item_to_agol(zip_path, title, tags, gis_connection)
 
 
+def _count_features_in_agol_service_impl(service_item) -> int:
+    """
+    Count features in an ArcGIS Online service using the ArcGIS API.
+
+    Args:
+        service_item: ArcGIS service item (Table or FeatureLayer)
+
+    Returns:
+        Number of features in the service
+    """
+    try:
+        # Use the query method to get feature count
+        # query with return_count_only=True is the most efficient way
+        result = retry(service_item.query, return_count_only=True)
+        count = result
+        return count
+    except Exception as e:
+        logger.error(f"Failed to count features in AGOL service: {e}", exc_info=True)
+        return -1
+
+
 def _get_service_item_from_agol(
     table: str, agol_items_lookup: dict[str, dict], gis_connection: GIS
 ) -> Item | None:
@@ -349,6 +370,7 @@ def update_feature_services(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
     current_hashes: dict[str, str],
+    source_counts: dict[str, int],
     gis_connection: GIS | None = None,
 ) -> None:
     """
@@ -358,6 +380,8 @@ def update_feature_services(
         gdb_item: The uploaded AGOL item containing the FGDB
         tables: List of table names to update
         agol_items_lookup: Lookup dictionary with AGOL item information
+        current_hashes: Dictionary mapping table names to their current hashes
+        source_counts: Dictionary mapping table names to their source feature counts
         gis_connection: GIS connection (optional, will create new if not provided).
                        Primarily used for testing to inject mock connections.
     """
@@ -385,6 +409,13 @@ def update_feature_services(
 
             logger.info(f"Updating feature service for {table} with new FGDB data.")
 
+            # Count features before truncation
+            pre_truncate_count = _count_features_in_agol_service_impl(service_item)
+            if pre_truncate_count >= 0:
+                logger.info(
+                    f"📊 Target service {table} before truncation: {pre_truncate_count:,} features"
+                )
+
             # Truncate existing data
             _truncate_service_data(service_item)
 
@@ -402,6 +433,24 @@ def update_feature_services(
                 if summary:
                     summary.add_table_error(table, "update", error_msg)
             else:
+                # Count features after append and compare with source
+                post_append_count = _count_features_in_agol_service_impl(service_item)
+                if post_append_count >= 0:
+                    logger.info(
+                        f"📊 Target service {table} after append: {post_append_count:,} features"
+                    )
+
+                    # Check for count mismatch
+                    source_count = source_counts.get(table, -1)
+                    if source_count >= 0 and source_count != post_append_count:
+                        if summary:
+                            summary.add_feature_count_mismatch(
+                                table, source_count, post_append_count
+                            )
+                        logger.error(
+                            f"📊 Feature count mismatch for {table}: Source {source_count:,} != Final {post_append_count:,}"
+                        )
+
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
                     item_id = agol_items_lookup[table]["item_id"]
@@ -438,7 +487,7 @@ def _create_and_publish_service(
     try:
         # Create FGDB for this single table
         logger.info("Uploading FGDB")
-        fgdb_path = create_fgdb([table], agol_items_lookup)
+        fgdb_path, source_counts = create_fgdb([table], agol_items_lookup)
         single_item = zip_and_upload_fgdb(fgdb_path, gis_connection)
 
         # Publish the FGDB as a feature service

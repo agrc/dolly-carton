@@ -1,6 +1,6 @@
 """Tests for utility functions in dolly.utils module."""
 
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
@@ -861,3 +861,29 @@ class TestRetry:
 
         result = retry(function_returning_none)
         assert result is None
+
+
+class TestFeatureCountingFunctions:
+    """Test cases for feature counting utility functions."""
+
+    def test_count_features_in_internal_table_not_implemented(self):
+        """Test that internal table counting raises NotImplementedError."""
+        from dolly.utils import count_features_in_internal_table
+
+        with pytest.raises(NotImplementedError):
+            count_features_in_internal_table("sgid.test.table")
+
+    def test_count_features_in_fgdb_layer_not_implemented(self):
+        """Test that FGDB layer counting raises NotImplementedError."""
+        from dolly.utils import count_features_in_fgdb_layer
+
+        with pytest.raises(NotImplementedError):
+            count_features_in_fgdb_layer("/path/to/test.gdb", "test_layer")
+
+    def test_count_features_in_agol_service_not_implemented(self):
+        """Test that AGOL service counting raises NotImplementedError."""
+        from dolly.utils import count_features_in_agol_service
+
+        mock_service = MagicMock()
+        with pytest.raises(NotImplementedError):
+            count_features_in_agol_service(mock_service)

@@ -291,6 +291,87 @@ def update_agol_item(
         connection.close()
 
 
+def _count_features_in_internal_table_impl(
+    table: str, connection: pyodbc.Connection | None = None
+) -> int:
+    """
+    Count features in an internal database table using SQL.
+
+    Args:
+        table: Table name in format "sgid.schema.table"
+        connection: Database connection (optional, will create new if not provided)
+
+    Returns:
+        Number of features in the table
+    """
+    if connection is None:
+        connection = _get_database_connection()
+
+    try:
+        # Convert table name to SQL format (SGID.Schema.Table)
+        parts = table.split(".")
+        if len(parts) != 3:
+            raise ValueError(
+                f"Table name '{table}' must be in format 'sgid.schema.table'"
+            )
+
+        sql_table_name = f"{parts[0].upper()}.{parts[1].title()}.{parts[2].title()}"
+        query = f"SELECT COUNT(*) FROM {sql_table_name}"
+
+        cursor = connection.cursor()
+        cursor.execute(query)
+        count = cursor.fetchone()[0]
+        cursor.close()
+
+        logger.info(f"📊 Source table {table}: {count:,} features")
+        return count
+    except Exception as e:
+        logger.error(f"Failed to count features in table {table}: {e}", exc_info=True)
+        return -1
+    finally:
+        if connection:
+            connection.close()
+
+
+def _count_features_in_fgdb_layer_impl(fgdb_path, layer_name: str) -> int:
+    """
+    Count features in a File Geodatabase layer using GDAL.
+
+    Args:
+        fgdb_path: Path to the File Geodatabase
+        layer_name: Name of the layer within the FGDB
+
+    Returns:
+        Number of features in the layer
+    """
+    try:
+        # Open the FGDB using GDAL
+        dataset = gdal.OpenEx(str(fgdb_path), gdal.OF_VECTOR)
+        if dataset is None:
+            logger.error(f"Failed to open FGDB at {fgdb_path}")
+            return -1
+
+        # Get the layer by name
+        layer = dataset.GetLayerByName(layer_name)
+        if layer is None:
+            logger.error(f"Layer {layer_name} not found in FGDB {fgdb_path}")
+            return -1
+
+        count = layer.GetFeatureCount()
+        logger.info(f"📊 FGDB layer {layer_name}: {count:,} features")
+
+        # Clean up
+        layer = None
+        dataset = None
+
+        return count
+    except Exception as e:
+        logger.error(
+            f"Failed to count features in FGDB layer {layer_name}: {e}", exc_info=True
+        )
+        return -1
+
+
 def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
     """
     Prepare GDAL translation options for a table.
@@ -327,7 +408,7 @@ def _copy_table_to_fgdb(
     table: str,
     output_path: Path,
     agol_item_info: dict,
-) -> bool:
+) -> tuple[bool, int]:
     """
     Copy a single table to FGDB using GDAL operations.
 
@@ -338,9 +419,12 @@ def _copy_table_to_fgdb(
         agol_item_info: AGOL item information dictionary
 
     Returns:
-        True if copy was successful, False otherwise
+        Tuple of (success_status, source_feature_count)
     """
     logger.info(f"Copying layer {table} to FGDB.")
+
+    # Count features in source table
+    source_count = _count_features_in_internal_table_impl(table)
 
     try:
         gdal_options = _prepare_gdal_options(table, agol_item_info)
@@ -351,18 +435,18 @@ def _copy_table_to_fgdb(
 
         logger.info(f"Successfully copied layer {table} to FGDB.")
 
-        return True
+        return True, source_count
     except Exception as e:
         logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}", exc_info=True)
 
-        return False
+        return False, source_count
 
 
 def create_fgdb(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
     gdal_connection: gdal.Dataset | None = None,
-) -> Path:
+) -> tuple[Path, dict[str, int]]:
     """
     Create a File Geodatabase (FGDB) from the specified tables.
 
@@ -373,7 +457,7 @@ def create_fgdb(
                         Primarily used for testing to inject mock connections.
 
     Returns:
-        Path to the created FGDB
+        Tuple of (Path to the created FGDB, dictionary mapping table names to source feature counts)
     """
     # Use provided connection or create a new one
     if gdal_connection is None:
@@ -391,12 +475,23 @@ def create_fgdb(
 
         # Copy tables first to create the FGDB structure
         tables_copied = False
+        source_counts = {}
         for table in tables:
-            success = _copy_table_to_fgdb(
+            success, source_count = _copy_table_to_fgdb(
                 internal, table, output_gdb_path, agol_items_lookup[table]
             )
             if success:
                 tables_copied = True
+                source_counts[table] = source_count
+
+                # Count features in the created FGDB layer
+                title = agol_items_lookup[table]["published_name"]
+                layer_name = get_service_from_title(title)
+                fgdb_count = _count_features_in_fgdb_layer_impl(
+                    output_gdb_path, layer_name
+                )
+                if fgdb_count >= 0:
+                    logger.info(f"📊 FGDB layer {layer_name}: {fgdb_count:,} features")
 
         if not tables_copied:
             raise Exception("FGDB creation failed for all tables.")
@@ -452,7 +547,7 @@ def create_fgdb(
         finally:
             db_connection.close()
 
-        return output_gdb_path
+        return output_gdb_path, source_counts
     finally:
         if internal is not None:
             internal = None
