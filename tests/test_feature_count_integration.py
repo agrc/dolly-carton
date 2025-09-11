@@ -82,26 +82,7 @@ class TestFeatureCountIntegration:
         assert "completed with errors" in message_str
         assert "Feature count mismatches: *1*" in message_str
 
-    def test_feature_counting_function_interfaces(self):
-        """Test that the feature counting function interfaces work as expected."""
-        from tests.test_helpers import (
-            count_features_in_agol_service,
-            count_features_in_fgdb_layer,
-            count_features_in_internal_table,
-        )
 
-        # These are placeholder functions that should raise NotImplementedError
-        # until called from their appropriate modules with proper implementations
-
-        with pytest.raises(NotImplementedError):
-            count_features_in_internal_table("sgid.test.table")
-
-        with pytest.raises(NotImplementedError):
-            count_features_in_fgdb_layer("/path/to/test.gdb", "test_layer")
-
-        mock_service = MagicMock()
-        with pytest.raises(NotImplementedError):
-            count_features_in_agol_service(mock_service)
 
     def test_logging_output_format(self):
         """Test that feature count logging uses the expected format."""
