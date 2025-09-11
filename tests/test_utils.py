@@ -863,27 +863,4 @@ class TestRetry:
         assert result is None
 
 
-class TestFeatureCountingFunctions:
-    """Test cases for feature counting utility functions."""
 
-    def test_count_features_in_internal_table_not_implemented(self):
-        """Test that internal table counting raises NotImplementedError."""
-        from tests.test_helpers import count_features_in_internal_table
-
-        with pytest.raises(NotImplementedError):
-            count_features_in_internal_table("sgid.test.table")
-
-    def test_count_features_in_fgdb_layer_not_implemented(self):
-        """Test that FGDB layer counting raises NotImplementedError."""
-        from tests.test_helpers import count_features_in_fgdb_layer
-
-        with pytest.raises(NotImplementedError):
-            count_features_in_fgdb_layer("/path/to/test.gdb", "test_layer")
-
-    def test_count_features_in_agol_service_not_implemented(self):
-        """Test that AGOL service counting raises NotImplementedError."""
-        from tests.test_helpers import count_features_in_agol_service
-
-        mock_service = MagicMock()
-        with pytest.raises(NotImplementedError):
-            count_features_in_agol_service(mock_service)
