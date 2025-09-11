@@ -215,6 +215,11 @@ dolly-cleanup-dev-agol
 - **Retry logic**: Built-in retry decorator for network operations
 - **Logging**: Structured logging with context-aware messages
 
+### Documentation Guidelines
+- **No separate documentation files**: Implementation summaries and technical details should be included in PR descriptions, not as separate .md files in the repository
+- **Code comments**: Focus on inline documentation and docstrings rather than standalone files
+- **README updates**: Only update existing documentation files when directly related to code changes
+
 ### Testing Patterns
 - **Pytest-style classes**: No unittest.TestCase inheritance
 - **Mock usage**: Extensive use of pytest-mock for external dependencies
