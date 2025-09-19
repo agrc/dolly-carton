@@ -38,9 +38,6 @@ class ProcessSummary:
     publish_errors: List[str] = field(default_factory=list)
     global_errors: List[str] = field(default_factory=list)
 
-    # Feature count tracking
-    feature_count_mismatches: List[str] = field(default_factory=list)
-
     # Timing
     start_time: float = 0.0
     end_time: float = 0.0
@@ -86,11 +83,7 @@ class ProcessSummary:
         self, table: str, source_count: int, final_count: int
     ) -> None:
         """Add a feature count mismatch error for a table."""
-        mismatch_message = (
-            f"{table}: Source count {source_count} != Final count {final_count}"
-        )
-        self.feature_count_mismatches.append(mismatch_message)
-        # Also add it as a table error for consistency
+        # Add it as a table error
         self.add_table_error(
             table, "update", f"Feature count mismatch: {source_count} -> {final_count}"
         )
@@ -149,13 +142,6 @@ class ProcessSummary:
             for error in self.global_errors:
                 logger.info(f"   • {error}")
 
-        if self.feature_count_mismatches:
-            logger.info(
-                f"📊 Feature count mismatches: {len(self.feature_count_mismatches)}"
-            )
-            for mismatch in self.feature_count_mismatches:
-                logger.info(f"   • {mismatch}")
-
         # Timing information
         elapsed_time = self.get_total_elapsed_time()
         logger.info(f"⏱️  Total elapsed time: {humanize.precisedelta(elapsed_time)}")
@@ -163,7 +149,7 @@ class ProcessSummary:
         # Overall status
         if self.global_errors:
             logger.info("🔴 Process failed due to global errors")
-        elif self.tables_with_errors or self.feature_count_mismatches:
+        elif self.tables_with_errors:
             logger.info("🟡 Process completed with errors")
         elif total_tables > 0:
             logger.info("🟢 Process completed successfully")
@@ -289,7 +275,7 @@ class ProcessSummary:
         if self.global_errors:
             status_emoji = "🔴"
             status_text = "failed due to global errors"
-        elif self.tables_with_errors or self.feature_count_mismatches:
+        elif self.tables_with_errors:
             status_emoji = "🟡"
             status_text = "completed with errors"
         elif total_tables > 0:
@@ -368,7 +354,6 @@ class ProcessSummary:
                             • Updated: *{len(self.tables_updated)}*
                             • Published: *{len(self.tables_published)}*
                             • Table errors: *{len(self.tables_with_errors)}*
-                            • Feature count mismatches: *{len(self.feature_count_mismatches)}*
                             • Global errors: *{len(self.global_errors)}*
                         """)
                     ),
@@ -381,7 +366,6 @@ class ProcessSummary:
             or self.tables_published
             or self.tables_with_errors
             or self.global_errors
-            or self.feature_count_mismatches
         ):
             blocks.append({"type": "divider"})
 
@@ -427,14 +411,8 @@ class ProcessSummary:
             )
             blocks.extend(global_error_blocks)
 
-        # Feature count mismatches section
-        if self.feature_count_mismatches:
-            mismatch_blocks = self._create_text_blocks_with_limit(
-                "📊 *Feature Count Mismatches:*",
-                self.feature_count_mismatches,
-                prefix="•",
-            )
-            blocks.extend(mismatch_blocks)
+        # Feature count mismatches section - REMOVED
+        # Feature count mismatches are now included in update errors
 
         if is_running_in_gcp:
             # Create GCP logs link with time range based on actual process execution time

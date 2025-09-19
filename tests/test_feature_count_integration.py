@@ -25,15 +25,10 @@ class TestFeatureCountIntegration:
             "sgid.test.table1", source_count, final_count
         )
 
-        # Verify that the count mismatch was recorded
-        assert len(summary.feature_count_mismatches) == 1
-        assert (
-            "sgid.test.table1: Source count 1000 != Final count 999"
-            in summary.feature_count_mismatches[0]
-        )
+        # Verify that the count mismatch was recorded in update errors
         assert "sgid.test.table1" in summary.tables_with_errors
 
-        # Verify it shows up in update errors too
+        # Verify it shows up in update errors
         assert any(
             "Feature count mismatch: 1000 -> 999" in error
             for error in summary.update_errors
@@ -51,7 +46,6 @@ class TestFeatureCountIntegration:
         summary.add_table_updated("sgid.test.table1")
 
         # No count mismatches should be recorded
-        assert len(summary.feature_count_mismatches) == 0
         assert len(summary.tables_updated) == 1
         assert "sgid.test.table1" not in summary.tables_with_errors
 
@@ -76,7 +70,6 @@ class TestFeatureCountIntegration:
         message_str = str(message)
         assert "🟡" in message_str
         assert "completed with errors" in message_str
-        assert "Feature count mismatches: *1*" in message_str
 
     def test_logging_output_format(self):
         """Test that feature count logging uses the expected format."""
