@@ -712,3 +712,78 @@ class TestSlackIntegration:
         # The test passes if the message is formatted successfully
         # (The continuation logic is complex and depends on exact character counts)
         assert "blocks" in message
+
+    def test_format_slack_message_with_publish_errors(self):
+        """Test format_slack_message includes publish errors section."""
+        summary = ProcessSummary()
+        summary.start_time = 100.0
+        summary.end_time = 110.0
+
+        # Add some publish errors to trigger the publish errors block
+        summary.add_table_error("sgid.test.table1", "publish", "Authentication failed")
+        summary.add_table_error("sgid.test.table2", "publish", "Invalid geometry")
+
+        message = summary.format_slack_message()
+
+        # Check that publish errors are included in the message
+        message_text = str(message)
+        assert "📤 Publish Error Details" in message_text
+        assert "Authentication failed" in message_text
+        assert "Invalid geometry" in message_text
+
+    @patch("dolly.summary.logger")
+    def test_finish_summary_logs_no_slack_webhook(self, mock_logger):
+        """Test that finish_summary logs when no Slack webhook URL is provided."""
+        with patch("dolly.summary.get_secrets") as mock_get_secrets:
+            # Mock secrets with empty/None Slack webhook
+            mock_get_secrets.return_value = {"SLACK_WEBHOOK_URL": None}
+
+            # Start a summary
+            start_time = time.time()
+            start_summary(start_time)
+
+            # Call finish_summary which should log the no webhook message
+            finish_summary(start_time + 10)
+
+            # Verify the logger.info was called with the expected message
+            # Check for any call that contains our expected message
+            expected_message = (
+                "No Slack webhook URL configured, skipping Slack notification"
+            )
+            info_calls = [
+                call
+                for call in mock_logger.info.call_args_list
+                if call[0][0] == expected_message
+            ]
+            assert len(info_calls) > 0, (
+                f"Expected message not found in logger.info calls: {mock_logger.info.call_args_list}"
+            )
+
+    def test_create_text_blocks_title_continuation_without_asterisk(self):
+        """Test _create_text_blocks_with_limit when title doesn't end with asterisk."""
+        summary = ProcessSummary()
+
+        # Use a title that doesn't end with "*" to test line 236
+        title = "Test Title Without Asterisk"
+
+        # Create many long items to force block splitting
+        long_items = [
+            f"sgid.very_long_schema_name.very_long_table_name_with_lots_of_chars_{i:03d}"
+            for i in range(100)
+        ]
+
+        # Call the method directly to test the specific branch
+        blocks = summary._create_text_blocks_with_limit(title, long_items)
+
+        # Should have multiple blocks with continuation titles
+        assert len(blocks) > 1
+
+        # Check that continuation was added properly to title without asterisk
+        found_continuation = False
+        for block in blocks[1:]:  # Skip first block, check continuation blocks
+            text = block["text"]["text"]
+            if "*(continued)*" in text:
+                found_continuation = True
+                break
+
+        assert found_continuation
