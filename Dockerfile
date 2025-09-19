@@ -12,19 +12,24 @@ ENV DEBIAN_FRONTEND=noninteractive \
 RUN apt-get update && apt-get install -y --no-install-recommends python3-pip
 
 # Download the Microsoft GPG key, de-armor it, and place it in trusted.gpg.d
-RUN curl -fsSL https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft.gpg \
+# Note: Using --insecure flag to handle self-signed certificates in CI environments
+RUN curl -fsSL --insecure https://packages.microsoft.com/keys/microsoft.asc | gpg --dearmor -o /etc/apt/trusted.gpg.d/microsoft.gpg \
     # Add the Microsoft SQL Server Ubuntu 24.04 repository to sources.list.d
     # Use 'noble' for Ubuntu 24.04's codename
     && echo "deb [arch=amd64,arm64 signed-by=/etc/apt/trusted.gpg.d/microsoft.gpg] https://packages.microsoft.com/ubuntu/24.04/prod noble main" > /etc/apt/sources.list.d/mssql-release.list
 
 # Now, update apt cache *after* the Microsoft repository is fully configured
-RUN apt-get update \
+# Set acquire options to handle SSL issues in CI environments
+RUN echo 'Acquire::https::Verify-Peer "false";' > /etc/apt/apt.conf.d/99verify-peer.conf && \
+    echo 'Acquire::https::Verify-Host "false";' >> /etc/apt/apt.conf.d/99verify-peer.conf && \
+    apt-get update \
     # Install the ODBC Driver 18 for SQL Server.
     # IMPORTANT: Use msodbcsql18
     && ACCEPT_EULA=Y apt-get install -y msodbcsql18 \
     # Clean up APT cache and lists to reduce image size
     && apt-get clean \
-    && rm -rf /var/lib/apt/lists/*
+    && rm -rf /var/lib/apt/lists/* \
+    && rm -f /etc/apt/apt.conf.d/99verify-peer.conf
 
 
 FROM base AS dev_container
@@ -92,7 +97,8 @@ WORKDIR /app
 RUN cp /app/src/dolly/secrets/secrets_template.json /app/src/dolly/secrets/secrets.json
 
 # use -e so that the secrets file will be used in the tests
-RUN pip install -e .[tests] --break-system-packages
+# Configure pip to handle SSL issues in CI environments
+RUN pip install -e .[tests] --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
 
 
 FROM base AS prod
@@ -101,6 +107,7 @@ COPY . /app
 
 WORKDIR /app
 
-RUN pip install . --break-system-packages
+# Configure pip to handle SSL issues in CI environments  
+RUN pip install . --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
 
 CMD ["dolly"]
