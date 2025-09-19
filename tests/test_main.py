@@ -91,7 +91,7 @@ class TestMain:
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
         mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "10 seconds"
-        mock_create_fgdb.return_value = Path("/test/output/data.gdb")
+        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000})
         mock_zip_and_upload_fgdb.return_value = Mock()
 
         _main_logic()
@@ -178,7 +178,7 @@ class TestMain:
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
         mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "20 seconds"
-        mock_create_fgdb.return_value = Path("/test/output/data.gdb")
+        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000, "sgid.transportation.roads": 2000})
         mock_zip_and_upload_fgdb.return_value = Mock()
 
         _main_logic()
@@ -309,7 +309,7 @@ class TestMain:
     ):
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
         mock_requests_post.return_value.status_code = 200
-        mock_create_fgdb.return_value = Path("/test/output/data.gdb")
+        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000})
         mock_zip_and_upload_fgdb.return_value = Mock()
         mock_get_current_hashes.return_value = {
             "sgid.society.cemeteries": "h1",
