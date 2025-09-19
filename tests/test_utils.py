@@ -1,6 +1,6 @@
 """Tests for utility functions in dolly.utils module."""
 
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -861,6 +861,3 @@ class TestRetry:
 
         result = retry(function_returning_none)
         assert result is None
-
-
-
