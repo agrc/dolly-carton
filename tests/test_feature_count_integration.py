@@ -1,9 +1,5 @@
 """Integration tests for feature count logging functionality."""
 
-from unittest.mock import MagicMock
-
-import pytest
-
 from dolly.summary import ProcessSummary, get_current_summary, start_summary
 
 
@@ -81,8 +77,6 @@ class TestFeatureCountIntegration:
         assert "🟡" in message_str
         assert "completed with errors" in message_str
         assert "Feature count mismatches: *1*" in message_str
-
-
 
     def test_logging_output_format(self):
         """Test that feature count logging uses the expected format."""
