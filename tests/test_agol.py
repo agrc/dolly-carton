@@ -752,6 +752,7 @@ class TestZipAndUploadFgdb:
 class TestUpdateFeatureServices:
     """Test cases for the update_feature_services function."""
 
+    @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.retry")
     @patch("dolly.agol.get_service_from_title")
@@ -772,6 +773,7 @@ class TestUpdateFeatureServices:
         mock_get_service_from_title,
         mock_retry,
         mock_set_table_hash,
+        mock_count_features,
     ):
         """Test successful update of feature services."""
         # Setup mocks
@@ -802,11 +804,17 @@ class TestUpdateFeatureServices:
         mock_truncate.return_value = True
         mock_append.return_value = True
         mock_get_service_from_title.side_effect = ["cemeteries", "roads"]
+        mock_count_features.return_value = 1000  # Mock feature count
+
+        source_counts = {
+            "sgid.society.cemeteries": 1000,
+            "sgid.transportation.roads": 2000,
+        }
 
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes
+            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
         # Verify all services were processed
@@ -838,10 +846,12 @@ class TestUpdateFeatureServices:
 
         mock_get_service_item.return_value = None
 
+        source_counts = {"sgid.society.cemeteries": 1000}
+
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes
+            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
         # Should not delete gdb item when there are errors
@@ -868,9 +878,11 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
+        source_counts = {"sgid.society.cemeteries": 1000}
+
         # Call without providing gis_connection (None by default)
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes
+            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
         # Verify _get_gis_connection was called
@@ -879,6 +891,7 @@ class TestUpdateFeatureServices:
             "sgid.society.cemeteries", agol_items_lookup, mock_gis
         )
 
+    @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol.get_service_from_title")
     @patch("dolly.agol._append_new_data_to_service")
     @patch("dolly.agol._truncate_service_data")
@@ -895,6 +908,7 @@ class TestUpdateFeatureServices:
         mock_truncate,
         mock_append,
         mock_get_service_from_title,
+        mock_count_features,
     ):
         """Test update when append operation fails (covers line 390)."""
         mock_gis = Mock()
@@ -916,11 +930,14 @@ class TestUpdateFeatureServices:
         mock_truncate.return_value = True
         mock_append.return_value = False  # This should trigger has_errors = True
         mock_get_service_from_title.return_value = "cemeteries"
+        mock_count_features.return_value = 1000  # Mock feature count
+
+        source_counts = {"sgid.society.cemeteries": 1000}
 
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes
+            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
         # Verify append was called and returned False
@@ -928,6 +945,7 @@ class TestUpdateFeatureServices:
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
 
+    @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol._append_new_data_to_service")
     @patch("dolly.agol._truncate_service_data")
     @patch("dolly.agol._get_appropriate_service_layer")
@@ -942,6 +960,7 @@ class TestUpdateFeatureServices:
         mock_get_service_layer,
         mock_truncate,
         mock_append,
+        mock_count_features,
     ):
         """Test update when an exception occurs during processing."""
         mock_gis = Mock()
@@ -958,10 +977,12 @@ class TestUpdateFeatureServices:
         mock_get_service_item.return_value = mock_item
         mock_get_service_layer.side_effect = Exception("Service layer error")
 
+        source_counts = {"sgid.society.cemeteries": 1000}
+
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes
+            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
         # Should log the error
@@ -987,7 +1008,8 @@ class TestCreateAndPublishService:
         mock_gis = Mock()
 
         fgdb_path = Path("/test/society_cemeteries.gdb")
-        mock_create_fgdb.return_value = fgdb_path
+        source_counts = {table: 1000}
+        mock_create_fgdb.return_value = (fgdb_path, source_counts)
 
         mock_single_item = Mock()
         mock_zip_upload.return_value = mock_single_item

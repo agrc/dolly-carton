@@ -271,6 +271,8 @@ class TestGetAgolItemsLookup:
 class TestCreateFgdb:
     """Test cases for the create_fgdb function."""
 
+    @patch("dolly.internal._count_features_in_fgdb_layer")
+    @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.get_table_field_domains")
     @patch("dolly.internal._get_database_connection")
     @patch("dolly.internal._generate_output_path")
@@ -289,6 +291,8 @@ class TestCreateFgdb:
         mock_generate_path,
         mock_get_db_connection,
         mock_get_table_field_domains,
+        mock_count_internal,
+        mock_count_fgdb,
     ):
         """Test successful FGDB creation with provided GDAL connection."""
         # Setup mocks
@@ -300,6 +304,10 @@ class TestCreateFgdb:
 
         # Mock field domains function to return empty dict
         mock_get_table_field_domains.return_value = {}
+
+        # Mock feature counting functions
+        mock_count_internal.return_value = 1000
+        mock_count_fgdb.return_value = 1000
 
         mock_generate_path.return_value = Path("/test/output.gdb")
         mock_get_layer_name.return_value = "test_layer"
@@ -317,11 +325,13 @@ class TestCreateFgdb:
 
         result = create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
 
-        assert result == Path("/test/output.gdb")
+        assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})
         mock_gdal_connection.GetLayerCount.assert_called_once()
         mock_translate.assert_called_once()
         mock_logger.info.assert_called()
 
+    @patch("dolly.internal._count_features_in_fgdb_layer")
+    @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.get_table_field_domains")
     @patch("dolly.internal._get_database_connection")
     @patch("dolly.internal._get_gdal_connection")
@@ -340,6 +350,8 @@ class TestCreateFgdb:
         mock_get_gdal_connection,
         mock_get_db_connection,
         mock_get_table_field_domains,
+        mock_count_internal,
+        mock_count_fgdb,
     ):
         """Test that function creates GDAL connection when none provided."""
         # Setup mocks
@@ -352,6 +364,10 @@ class TestCreateFgdb:
 
         # Mock field domains function to return empty dict
         mock_get_table_field_domains.return_value = {}
+
+        # Mock feature counting functions
+        mock_count_internal.return_value = 1000
+        mock_count_fgdb.return_value = 1000
 
         mock_generate_path.return_value = Path("/test/output.gdb")
         mock_get_layer_name.return_value = "test_layer"
@@ -369,7 +385,7 @@ class TestCreateFgdb:
 
         result = create_fgdb(tables, agol_lookup)
 
-        assert result == Path("/test/output.gdb")
+        assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})
         mock_get_gdal_connection.assert_called_once()
         mock_gdal_connection.GetLayerCount.assert_called_once()
         mock_translate.assert_called_once()
@@ -381,6 +397,7 @@ class TestCreateFgdb:
         with pytest.raises(ValueError, match="No tables provided to create FGDB"):
             create_fgdb([], {}, gdal_connection=mock_gdal_connection)
 
+    @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal._generate_output_path")
     @patch("dolly.internal.get_gdal_layer_name")
     @patch("dolly.internal._get_geometry_option")
@@ -395,11 +412,15 @@ class TestCreateFgdb:
         mock_get_geom_option,
         mock_get_layer_name,
         mock_generate_path,
+        mock_count_internal,
     ):
         """Test that function raises exception when all tables fail to copy."""
         # Setup mocks
         mock_gdal_connection = Mock()
         mock_gdal_connection.GetLayerCount.return_value = 5
+
+        # Mock feature counting functions
+        mock_count_internal.return_value = 1000
 
         mock_generate_path.return_value = Path("/test/output.gdb")
         mock_get_layer_name.return_value = "test_layer"
