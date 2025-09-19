@@ -90,7 +90,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
   ```
   - **CRITICAL**: Takes 1-5 minutes depending on network. NEVER CANCEL. Set timeout to 30+ minutes.
   - Downloads Microsoft ODBC Driver 18 for SQL Server
-  - May fail in restricted network environments due to SSL/download restrictions
+  - Includes SSL workarounds for CI environments with self-signed certificates
   - Uses Ubuntu 24.04 base with GDAL 3.11.3 full support
 
 - **Run full test suite**:
@@ -166,7 +166,7 @@ dolly-cleanup-dev-agol
 
 ### Docker & Environment Issues
 - **"Module not found 'osgeo'" Error**: Trying to run outside Docker container → Use dev container
-- **Docker build SSL/network errors**: Restricted network blocking Microsoft ODBC downloads → Known limitation
+- **Docker build in CI environments**: SSL workarounds are included for self-signed certificates
 - **Firebase emulator not starting**: Should auto-start via `.zshrc` → Check with `nc -z 127.0.0.1 8080`
 - **"metadata.google.internal" firewall warning**: Normal when running locally → Safe to ignore
 
