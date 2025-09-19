@@ -323,7 +323,6 @@ def _count_features_in_internal_table(
         count = cursor.fetchone()[0]
         cursor.close()
 
-        logger.info(f"📊 Source table {table}: {count:,} features")
         return count
     except Exception as e:
         logger.error(f"Failed to count features in table {table}: {e}", exc_info=True)
@@ -358,7 +357,6 @@ def _count_features_in_fgdb_layer(fgdb_path, layer_name: str) -> int:
             return -1
 
         count = layer.GetFeatureCount()
-        logger.info(f"📊 FGDB layer {layer_name}: {count:,} features")
 
         # Clean up
         layer = None
