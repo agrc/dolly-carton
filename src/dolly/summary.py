@@ -411,9 +411,6 @@ class ProcessSummary:
             )
             blocks.extend(global_error_blocks)
 
-        # Feature count mismatches section - REMOVED
-        # Feature count mismatches are now included in update errors
-
         if is_running_in_gcp:
             # Create GCP logs link with time range based on actual process execution time
             # Add 1 hour buffer to start and end times
