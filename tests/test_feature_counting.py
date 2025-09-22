@@ -55,7 +55,7 @@ class TestFeatureCountingErrorPaths:
         """Test counting FGDB features when layer is not found."""
         mock_dataset = Mock()
         mock_open.return_value = mock_dataset
-        mock_dataset.GetLayerByName.return_value = None  # Layer not found
+        mock_dataset.GetLayerByName.side_effect = Exception("Layer not found")  # Simulate GDAL exception
 
         result = _count_features_in_fgdb_layer(Path("/test/path.gdb"), "nonexistent_layer")
         
