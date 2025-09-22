@@ -1,8 +1,6 @@
 """Test cases for main.py functions and cleanup logic."""
 
-from pathlib import Path
-from unittest.mock import Mock, patch, call
-import pytest
+from unittest.mock import Mock, patch
 
 from dolly.main import clean_up, _main_logic
 

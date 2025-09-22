@@ -17,6 +17,8 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 ### Core Technologies
 - **Python 3.12** - Primary language
 - **GDAL 3.11.3** - Geospatial data processing (CRITICAL: Only available via Docker)
+  - **Important**: `gdal.UseExceptions()` is enabled, so GDAL functions raise exceptions instead of returning None on errors
+  - No need to check GDAL results for None values - exceptions will be raised automatically
 - **Docker** - Required for GDAL support and consistent deployment
 - **ArcGIS Python API** - ArcGIS Online integration
 - **Google Cloud Firestore** - State management for prod/staging
