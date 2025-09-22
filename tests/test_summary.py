@@ -583,7 +583,6 @@ class TestSlackIntegration:
 
         # Check if we have enough blocks first
         message = summary.format_slack_message()
-        print(f"Generated {len(message['blocks'])} blocks")
 
         # If we still don't have >50 blocks, skip this test
         if len(message["blocks"]) <= 50:
