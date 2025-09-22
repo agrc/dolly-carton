@@ -16,7 +16,7 @@ class TestFeatureCountIntegration:
         assert summary is not None
 
         # Simulate successful table processing
-        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
 
         # Simulate feature count mismatch detection
         source_count = 1000
@@ -43,7 +43,7 @@ class TestFeatureCountIntegration:
         assert summary is not None
 
         # Simulate successful table processing with matching counts
-        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
 
         # No count mismatches should be recorded
         assert len(summary.tables_updated) == 1
@@ -54,7 +54,7 @@ class TestFeatureCountIntegration:
         summary = ProcessSummary()
 
         # Add a successful table update
-        summary.add_table_updated("sgid.test.table1")
+        summary.add_table_updated("sgid.test.table1", None)
 
         # No errors initially - should be success
         message = summary.format_slack_message()
