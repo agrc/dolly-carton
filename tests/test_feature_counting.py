@@ -43,7 +43,7 @@ class TestFeatureCountingErrorPaths:
     @patch("dolly.internal.gdal.OpenEx")
     def test_count_fgdb_layer_open_failure(self, mock_open):
         """Test counting FGDB features when GDAL can't open the file."""
-        mock_open.return_value = None  # GDAL returns None on failure
+        mock_open.side_effect = Exception("GDAL open failure")  # GDAL raises exception on failure
 
         result = _count_features_in_fgdb_layer(Path("/nonexistent/path.gdb"), "test_layer")
         
