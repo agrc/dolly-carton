@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.0.4](https://github.com/agrc/dolly-carton/compare/v1.0.3...v1.0.4) (2025-09-22)
+
+
+### Features
+
+* add AGOL item links to Slack summary report ([c0f5442](https://github.com/agrc/dolly-carton/commit/c0f5442b308162608f1a023940f293fd571acab2))
+* make item_id parameter required in add_table methods ([4b417f3](https://github.com/agrc/dolly-carton/commit/4b417f3f065c29f94057d1a3dea48e93960542d5))
+
+
+### Bug Fixes
+
+* resolve Docker build SSL certificate issues in CI environments ([bebd4bd](https://github.com/agrc/dolly-carton/commit/bebd4bd2f52fc08724419fcfafd2905f64d4a713))
+
+
+### Documentation
+
+* Create GitHub Copilot instructions with agent testing restrictions and firewall guidance ([#26](https://github.com/agrc/dolly-carton/issues/26)) ([c3a442a](https://github.com/agrc/dolly-carton/commit/c3a442a2257e7a334a6f0241aa5876bcd1c8d19d))
+* update copilot instructions to reflect resolved Docker build issues ([915e1a9](https://github.com/agrc/dolly-carton/commit/915e1a9f5b15cb0f41106aa9f66b7ff00b6a4db4))
+
 ## [1.0.3](https://github.com/agrc/dolly-carton/compare/v1.0.2...v1.0.3) (2025-08-26)
 
 
