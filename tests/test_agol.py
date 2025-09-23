@@ -4,7 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from dolly.agol import (
-    _append_new_data_to_service,
+    _count_features_in_agol_service,
     _create_zip_from_fgdb,
     _delete_agol_item,
     _generate_service_tags,
@@ -15,7 +15,7 @@ from dolly.agol import (
     _get_gis_connection,
     _get_service_item_from_agol,
     _search_existing_item,
-    _truncate_service_data,
+    _truncate_and_append,
     _upload_item_to_agol,
 )
 
@@ -578,76 +578,43 @@ class TestGetAppropriateServiceLayer:
         )
 
 
-class TestTruncateServiceData:
-    """Test cases for the _truncate_service_data function."""
+class TestTruncateAndAppend:
+    """Tests for the combined _truncate_and_append operation."""
 
-    @patch("dolly.agol.retry")
-    @patch("dolly.agol.logger")
-    def test_truncate_success(self, mock_logger, mock_retry):
-        mock_service_item = Mock()
-        mock_retry.return_value = {"status": "Completed"}
+    def setup_method(self):
+        self.mock_service = Mock()
+        self.mock_gdb_item = Mock()
+        self.mock_gdb_item.id = "gdb-id"
 
-        result = _truncate_service_data(mock_service_item)
+    def test_success_bool_tuple(self):
+        # Simulate truncate success and append returning (True, messages)
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        self.mock_service.append.return_value = (True, [])
 
-        assert result is True
-        mock_retry.assert_called_once_with(
-            mock_service_item.manager.truncate,
-            asynchronous=True,
-            wait=True,
-        )
-        mock_logger.info.assert_called_once_with("truncating...")
+        assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
+        self.mock_service.manager.truncate.assert_called_once()
+        self.mock_service.append.assert_called_once()
 
-    @patch("dolly.agol.retry")
-    def test_truncate_failure(self, mock_retry):
-        mock_service_item = Mock()
-        mock_retry.return_value = {"status": "Failed"}
+    def test_success_bool_only(self):
+        # Simulate append returning just True
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        self.mock_service.append.return_value = True
 
-        with pytest.raises(
-            RuntimeError, match="Failed to truncate existing data in service"
-        ):
-            _truncate_service_data(mock_service_item)
+        assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
+    def test_truncate_failure_raises(self):
+        self.mock_service.manager.truncate.return_value = {"status": "Failed"}
 
-class TestAppendNewDataToService:
-    """Test cases for the _append_new_data_to_service function."""
+        with pytest.raises(RuntimeError, match="Failed to truncate"):
+            _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
-    @patch("dolly.agol.retry")
-    @patch("dolly.agol.logger")
-    def test_append_success(self, mock_logger, mock_retry):
-        mock_service_item = Mock()
-        mock_gdb_item = Mock()
-        mock_gdb_item.id = "gdb_item_id"
-        mock_retry.return_value = (True, [])
+    def test_append_failure_raises(self):
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        # Simulate append returning (False, messages)
+        self.mock_service.append.return_value = (False, ["error"])
 
-        result = _append_new_data_to_service(
-            mock_service_item, mock_gdb_item, "service_name"
-        )
-
-        assert result is True
-        mock_retry.assert_called_once_with(
-            mock_service_item.append,
-            item_id="gdb_item_id",
-            upload_format="filegdb",
-            source_table_name="service_name",
-            return_messages=True,
-            rollback=True,
-        )
-        mock_logger.info.assert_called_once_with("appending: service_name")
-
-    @patch("dolly.agol.retry")
-    @patch("dolly.agol.logger")
-    def test_append_failure(self, mock_logger, mock_retry):
-        mock_service_item = Mock()
-        mock_gdb_item = Mock()
-        mock_gdb_item.id = "gdb_item_id"
-        mock_retry.return_value = (False, [])
-
-        result = _append_new_data_to_service(
-            mock_service_item, mock_gdb_item, "service_name"
-        )
-
-        assert result is False
-        mock_logger.error.assert_called_once_with("Append failed but did not error")
+        with pytest.raises(RuntimeError, match="Append failed"):
+            _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
 
 class TestZipAndUploadFgdb:
@@ -756,8 +723,7 @@ class TestUpdateFeatureServices:
     @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.retry")
     @patch("dolly.agol.get_service_from_title")
-    @patch("dolly.agol._append_new_data_to_service")
-    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol._get_gis_connection")
@@ -768,8 +734,7 @@ class TestUpdateFeatureServices:
         mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
-        mock_truncate,
-        mock_append,
+        mock_truncate_and_append,
         mock_get_service_from_title,
         mock_retry,
         mock_set_table_hash,
@@ -801,8 +766,7 @@ class TestUpdateFeatureServices:
         mock_service2 = Mock()
         mock_get_service_layer.side_effect = [mock_service1, mock_service2]
 
-        mock_truncate.return_value = True
-        mock_append.return_value = True
+        mock_truncate_and_append.return_value = True
         mock_get_service_from_title.side_effect = ["cemeteries", "roads"]
         mock_count_features.return_value = 1000  # Mock feature count
 
@@ -820,8 +784,7 @@ class TestUpdateFeatureServices:
         # Verify all services were processed
         assert mock_get_service_item.call_count == 2
         assert mock_get_service_layer.call_count == 2
-        assert mock_truncate.call_count == 2
-        assert mock_append.call_count == 2
+        assert mock_truncate_and_append.call_count == 2
 
         # Verify cleanup - gdb item should be deleted
         mock_retry.assert_called_once_with(mock_gdb_item.delete, permanent=True)
@@ -893,8 +856,7 @@ class TestUpdateFeatureServices:
 
     @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol.get_service_from_title")
-    @patch("dolly.agol._append_new_data_to_service")
-    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol._get_gis_connection")
@@ -905,8 +867,7 @@ class TestUpdateFeatureServices:
         mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
-        mock_truncate,
-        mock_append,
+        mock_truncate_and_append,
         mock_get_service_from_title,
         mock_count_features,
     ):
@@ -927,8 +888,9 @@ class TestUpdateFeatureServices:
         mock_service = Mock()
         mock_get_service_layer.return_value = mock_service
 
-        mock_truncate.return_value = True
-        mock_append.return_value = False  # This should trigger has_errors = True
+        mock_truncate_and_append.return_value = (
+            False  # This should trigger has_errors = True
+        )
         mock_get_service_from_title.return_value = "cemeteries"
         mock_count_features.return_value = 1000  # Mock feature count
 
@@ -940,14 +902,13 @@ class TestUpdateFeatureServices:
             mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
         )
 
-        # Verify append was called and returned False
-        mock_append.assert_called_once()
+        # Verify combined op was called and returned False
+        mock_truncate_and_append.assert_called_once()
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
 
     @patch("dolly.agol._count_features_in_agol_service")
-    @patch("dolly.agol._append_new_data_to_service")
-    @patch("dolly.agol._truncate_service_data")
+    @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol._get_gis_connection")
@@ -958,8 +919,7 @@ class TestUpdateFeatureServices:
         mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
-        mock_truncate,
-        mock_append,
+        mock_truncate_and_append,
         mock_count_features,
     ):
         """Test update when an exception occurs during processing."""
@@ -1283,3 +1243,92 @@ class TestPublishNewFeatureServices:
 
         # Should continue processing even if configuration fails
         mock_configure.assert_called_once()
+
+
+class TestCountFeaturesInAgolService:
+    """Tests for the _count_features_in_agol_service helper."""
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.Table")
+    @patch("dolly.agol.Item")
+    @patch("dolly.agol._get_gis_connection")
+    def test_counts_table_features_success(
+        self, mock_get_gis, mock_item_cls, mock_table_cls, mock_retry
+    ):
+        # Arrange
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        mock_item_instance = Mock()
+        mock_item_cls.return_value = mock_item_instance
+
+        mock_layer = Mock()
+        mock_table_cls.fromitem.return_value = mock_layer
+
+        mock_retry.return_value = 123
+
+        service_item = Mock()
+        service_item.properties = {"type": "Table", "serviceItemId": "abc123"}
+
+        # Act
+        result = _count_features_in_agol_service(service_item)
+
+        # Assert
+        assert result == 123
+        mock_item_cls.assert_called_once_with(mock_gis, "abc123")
+        mock_table_cls.fromitem.assert_called_once_with(mock_item_instance)
+        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.FeatureLayer")
+    @patch("dolly.agol.Item")
+    @patch("dolly.agol._get_gis_connection")
+    def test_counts_feature_layer_success(
+        self, mock_get_gis, mock_item_cls, mock_fl_cls, mock_retry
+    ):
+        # Arrange
+        mock_gis = Mock()
+        mock_get_gis.return_value = mock_gis
+
+        mock_item_instance = Mock()
+        mock_item_cls.return_value = mock_item_instance
+
+        mock_layer = Mock()
+        mock_fl_cls.fromitem.return_value = mock_layer
+
+        mock_retry.return_value = 456
+
+        service_item = Mock()
+        service_item.properties = {
+            "type": "Feature Layer",
+            "serviceItemId": "svc-789",
+        }
+
+        # Act
+        result = _count_features_in_agol_service(service_item)
+
+        # Assert
+        assert result == 456
+        mock_item_cls.assert_called_once_with(mock_gis, "svc-789")
+        mock_fl_cls.fromitem.assert_called_once_with(mock_item_instance)
+        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+
+    @patch("dolly.agol.logger")
+    @patch("dolly.agol.Table")
+    @patch("dolly.agol.Item")
+    @patch("dolly.agol._get_gis_connection")
+    def test_error_path_returns_negative_one(
+        self, mock_get_gis, mock_item_cls, mock_table_cls, mock_logger
+    ):
+        # Arrange: make fromitem raise
+        mock_table_cls.fromitem.side_effect = Exception("boom")
+
+        service_item = Mock()
+        service_item.properties = {"type": "Table", "serviceItemId": "oops"}
+
+        # Act
+        result = _count_features_in_agol_service(service_item)
+
+        # Assert
+        assert result == -1
+        mock_logger.error.assert_called_once()

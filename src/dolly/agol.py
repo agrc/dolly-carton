@@ -314,39 +314,17 @@ def _get_appropriate_service_layer(
         return FeatureLayer.fromitem(item, layer_id=0)
 
 
-def _truncate_service_data(service_item: Table | FeatureLayer) -> bool:
-    """
-    Truncate all existing data from a service.
-
-    Args:
-        service_item: The Table or FeatureLayer service to truncate
-
-    Returns:
-        True if truncation was successful, False otherwise
-
-    Raises:
-        RuntimeError: If truncation fails
-    """
-    logger.info("truncating...")
-    truncate_result = retry(
-        service_item.manager.truncate,
-        asynchronous=True,
-        wait=True,
-    )
-
-    if truncate_result["status"] != "Completed":
-        raise RuntimeError("Failed to truncate existing data in service")
-
-    return True
-
-
-def _append_new_data_to_service(
+def _truncate_and_append(
     service_item: Table | FeatureLayer,
     gdb_item: Item,
     service_name: str,
 ) -> bool:
     """
-    Append new data from FGDB to a service.
+    Truncate existing data and append new data in a single retryable operation.
+
+    This wraps both truncate and append in a single retry so that if append fails
+    after a successful truncate, the retry will re-run the truncate to ensure the
+    target stays clean and avoids duplicate features.
 
     Args:
         service_item: The Table or FeatureLayer service to update
@@ -354,23 +332,47 @@ def _append_new_data_to_service(
         service_name: Name of the service layer in the FGDB
 
     Returns:
-        True if append was successful, False otherwise
+        True if the combined operation succeeded
+
+    Raises:
+        RuntimeError: If either truncate or append fails
     """
-    logger.info(f"appending: {service_name}")
-    result, messages = retry(
-        service_item.append,
-        item_id=gdb_item.id,
-        upload_format="filegdb",
-        source_table_name=service_name,
-        return_messages=True,
-        rollback=True,
-    )
-    if not result:
-        logger.error("Append failed but did not error")
 
-        return False
+    def _worker() -> bool:
+        # Do NOT use per-step retry here; the entire operation is retried as a unit
+        logger.info("truncating...")
+        truncate_result = cast(
+            dict,
+            service_item.manager.truncate(
+                asynchronous=True,
+                wait=True,
+            ),
+        )
+        if truncate_result.get("status") != "Completed":
+            raise RuntimeError("Failed to truncate existing data in service")
 
-    return True
+        logger.info(f"appending: {service_name}")
+        append_result = service_item.append(
+            item_id=gdb_item.id,
+            upload_format="filegdb",
+            source_table_name=service_name,
+            return_messages=True,
+            rollback=True,
+        )
+        # ArcGIS API may return either a bool or a (bool, messages) tuple
+        result = (
+            append_result[0]
+            if isinstance(append_result, tuple)
+            else bool(append_result)
+        )
+        if not result:
+            logger.error("Append failed but did not error")
+            raise RuntimeError("Append failed")
+
+        return True
+
+    # Retry the combined operation as a unit
+    return retry(_worker)
 
 
 def update_feature_services(
@@ -424,13 +426,10 @@ def update_feature_services(
                     f"📊 Target service {table} before truncation: {pre_truncate_count:,} features"
                 )
 
-            # Truncate existing data
-            _truncate_service_data(service_item)
-
-            # Append new data from FGDB
+            # Truncate and append as a single retryable operation
             title = agol_items_lookup[table]["published_name"]
             service_name = get_service_from_title(title)
-            success = _append_new_data_to_service(service_item, gdb_item, service_name)
+            success = _truncate_and_append(service_item, gdb_item, service_name)
 
             if not success:
                 has_errors = True
