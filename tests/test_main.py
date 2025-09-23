@@ -63,12 +63,14 @@ class TestMain:
     @patch("dolly.main.zip_and_upload_fgdb")
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
     def test_main_only_existing_services(
         self,
         mock_logger,
         mock_clean_up,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
         mock_zip_and_upload_fgdb,
@@ -80,6 +82,7 @@ class TestMain:
         mock_time,
     ):
         mock_time.side_effect = [1000.0, 1010.0]
+        mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {"sgid.society.cemeteries": "h0"}
         mock_get_current_hashes.return_value = {"sgid.society.cemeteries": "h1"}
         mock_determine_updated.return_value = ["sgid.society.cemeteries"]
@@ -105,12 +108,14 @@ class TestMain:
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
     def test_main_only_new_services(
         self,
         mock_logger,
         mock_clean_up,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_publish_new_feature_services,
         mock_get_table_hashes,
@@ -120,6 +125,7 @@ class TestMain:
         mock_time,
     ):
         mock_time.side_effect = [1000.0, 1015.0]
+        mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {"sgid.transportation.roads": "h2"}
         mock_determine_updated.return_value = ["sgid.transportation.roads"]
@@ -140,12 +146,14 @@ class TestMain:
     @patch("dolly.main.zip_and_upload_fgdb")
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
     def test_main_both_existing_and_new(
         self,
         mock_logger,
         mock_clean_up,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
         mock_zip_and_upload_fgdb,
@@ -158,6 +166,7 @@ class TestMain:
         mock_time,
     ):
         mock_time.side_effect = [1000.0, 1020.0]
+        mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {"sgid.society.cemeteries": "h0"}
         mock_get_current_hashes.return_value = {
             "sgid.society.cemeteries": "h1",
@@ -241,12 +250,14 @@ class TestMain:
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
     def test_main_skips_tables_not_in_lookup(
         self,
         mock_logger,
         mock_clean_up,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_get_table_hashes,
         mock_determine_updated,
@@ -255,6 +266,7 @@ class TestMain:
         mock_time,
     ):
         mock_time.side_effect = [1000.0, 1005.0]
+        mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {"sgid.unknown.table": "h1"}
         mock_determine_updated.return_value = ["sgid.unknown.table"]
@@ -267,29 +279,36 @@ class TestMain:
             "skipping sgid.unknown.table since it does not show up in the agol items lookup"
         )
 
+    @patch("dolly.main.time.time")
+    @patch("dolly.main.humanize.precisedelta")
+    @patch("dolly.main.get_current_hashes")
+    @patch("dolly.main.determine_updated_tables")
+    @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.update_feature_services")
     @patch("dolly.main.zip_and_upload_fgdb")
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.get_current_hashes")
-    @patch("dolly.main.determine_updated_tables")
-    @patch("dolly.main.get_table_hashes")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
     def test_main_cli_tables_parameter(
         self,
         mock_logger,
         mock_clean_up,
-        mock_get_table_hashes,
-        mock_determine_updated,
-        mock_get_current_hashes,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
         mock_zip_and_upload_fgdb,
         mock_update_feature_services,
         mock_publish_new_feature_services,
+        mock_get_table_hashes,
+        mock_determine_updated,
+        mock_get_current_hashes,
+        mock_precisedelta,
+        mock_time,
     ):
+        mock_get_gis_connection.return_value = Mock()
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
         mock_create_fgdb.return_value = (
             Path("/test/output/data.gdb"),
@@ -300,6 +319,8 @@ class TestMain:
             "sgid.society.cemeteries": "h1",
             "sgid.transportation.roads": "h2",
         }
+        mock_time.side_effect = [1000.0, 1020.0]
+        mock_precisedelta.return_value = "20 seconds"
 
         _main_logic(cli_tables="sgid.society.cemeteries,sgid.transportation.roads")
 
@@ -352,29 +373,24 @@ class TestCleanupDevAgolItems:
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.GIS")
-    @patch("dolly.main.get_secrets")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.logger")
     def test_cleanup_dev_agol_items_success(
         self,
         mock_logger,
-        mock_get_secrets,
-        mock_gis_class,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_precisedelta,
         mock_time,
     ):
         """Test successful cleanup of dev AGOL items."""
         # Setup mocks
-        mock_time.side_effect = [1000.0, 1010.0]
+        mock_time.side_effect = [1000.0, 1010.0, 1020.0, 1030.0]
         mock_precisedelta.return_value = "10 seconds"
-
-        mock_secrets = {"AGOL_USERNAME": "test_user", "AGOL_PASSWORD": "test_pass"}
-        mock_get_secrets.return_value = mock_secrets
 
         mock_gis = Mock()
         mock_gis.users.me.username = "test_user"
-        mock_gis_class.return_value = mock_gis
+        mock_get_gis_connection.return_value = mock_gis
 
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
 
@@ -387,11 +403,7 @@ class TestCleanupDevAgolItems:
         cleanup_dev_agol_items()
 
         # Verify GIS connection
-        mock_gis_class.assert_called_once_with(
-            "https://utah.maps.arcgis.com",
-            username="test_user",
-            password="test_pass",
-        )
+        mock_get_gis_connection.assert_called_once()
 
         # Verify search is called for table without item_id
         mock_gis.content.search.assert_called_once_with(
@@ -414,29 +426,24 @@ class TestCleanupDevAgolItems:
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.GIS")
-    @patch("dolly.main.get_secrets")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.logger")
     def test_cleanup_dev_agol_items_no_search_results(
         self,
         mock_logger,
-        mock_get_secrets,
-        mock_gis_class,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_precisedelta,
         mock_time,
     ):
         """Test cleanup when no search results are found."""
         # Setup mocks
-        mock_time.side_effect = [1000.0, 1010.0]
+        mock_time.side_effect = [1000.0, 1010.0, 1020.0, 1030.0]
         mock_precisedelta.return_value = "10 seconds"
-
-        mock_secrets = {"AGOL_USERNAME": "test_user", "AGOL_PASSWORD": "test_pass"}
-        mock_get_secrets.return_value = mock_secrets
 
         mock_gis = Mock()
         mock_gis.users.me.username = "test_user"
-        mock_gis_class.return_value = mock_gis
+        mock_get_gis_connection.return_value = mock_gis
 
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
 
@@ -454,29 +461,24 @@ class TestCleanupDevAgolItems:
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.GIS")
-    @patch("dolly.main.get_secrets")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.logger")
     def test_cleanup_dev_agol_items_deletion_failure(
         self,
         mock_logger,
-        mock_get_secrets,
-        mock_gis_class,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_precisedelta,
         mock_time,
     ):
         """Test cleanup when item deletion fails."""
         # Setup mocks
-        mock_time.side_effect = [1000.0, 1010.0]
+        mock_time.side_effect = [1000.0, 1010.0, 1020.0, 1030.0]
         mock_precisedelta.return_value = "10 seconds"
-
-        mock_secrets = {"AGOL_USERNAME": "test_user", "AGOL_PASSWORD": "test_pass"}
-        mock_get_secrets.return_value = mock_secrets
 
         mock_gis = Mock()
         mock_gis.users.me.username = "test_user"
-        mock_gis_class.return_value = mock_gis
+        mock_get_gis_connection.return_value = mock_gis
 
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
 
@@ -493,28 +495,23 @@ class TestCleanupDevAgolItems:
     @patch("dolly.main.time.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_agol_items_lookup")
-    @patch("dolly.main.GIS")
-    @patch("dolly.main.get_secrets")
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.logger")
     def test_cleanup_dev_agol_items_skips_existing_items(
         self,
         mock_logger,
-        mock_get_secrets,
-        mock_gis_class,
+        mock_get_gis_connection,
         mock_get_agol_items_lookup,
         mock_precisedelta,
         mock_time,
     ):
         """Test cleanup skips tables that already have item_ids."""
         # Setup mocks
-        mock_time.side_effect = [1000.0, 1010.0]
+        mock_time.side_effect = [1000.0, 1010.0, 1020.0, 1030.0]
         mock_precisedelta.return_value = "10 seconds"
 
-        mock_secrets = {"AGOL_USERNAME": "test_user", "AGOL_PASSWORD": "test_pass"}
-        mock_get_secrets.return_value = mock_secrets
-
         mock_gis = Mock()
-        mock_gis_class.return_value = mock_gis
+        mock_get_gis_connection.return_value = mock_gis
 
         # Only include table with existing item_id
         agol_items_lookup = {
