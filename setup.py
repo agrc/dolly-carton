@@ -11,7 +11,7 @@ from setuptools import find_packages, setup
 
 setup(
     name="dolly-carton",
-    version="1.0.4",
+    version="1.0.5",
     license="MIT",
     description="Project description.",
     long_description=(Path(__file__).parent / "README.md").read_text(),
