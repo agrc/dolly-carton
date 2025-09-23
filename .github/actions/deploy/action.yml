@@ -80,7 +80,7 @@ runs:
           /secrets/app/secrets.json=secrets:latest
         flags: |
           --memory=4G
-          --task-timeout=1h
+          --task-timeout=2h
           --service-account=cloud-run-sa@${{ inputs.project_id }}.iam.gserviceaccount.com
           --network=${{ inputs.shared_vpc_network }}
           --subnet=${{ inputs.shared_vpc_subnet }}
