@@ -4,6 +4,7 @@ import time
 from datetime import timedelta
 from typing import Optional
 
+import google.cloud.logging
 import humanize
 import typer
 from arcgis.gis import GIS
@@ -24,13 +25,20 @@ from dolly.state import get_table_hashes
 from dolly.summary import finish_summary, start_summary
 from dolly.utils import OUTPUT_PATH, get_secrets
 
-logging.basicConfig(level=logging.INFO)
+APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
+
 logger = logging.getLogger(__name__)
+
+if APP_ENVIRONMENT != "dev":
+    client = google.cloud.logging.Client()
+    client.setup_logging(log_level=logging.DEBUG)
+else:
+    logging.basicConfig(level=logging.INFO)
+
+logger.info(f"App environment: {APP_ENVIRONMENT}")
 
 #: throw exceptions on errors rather than returning None
 gdal.UseExceptions()
-
-APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 def clean_up() -> None:

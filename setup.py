@@ -40,6 +40,7 @@ setup(
     install_requires=[
         "arcgis==2.*",
         "google-cloud-firestore==2.*",
+        "google-cloud-logging==3.*",
         "humanize==4.*",
         "pyodbc==5.*",
         "requests==2.*",
