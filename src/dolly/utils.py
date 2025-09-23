@@ -41,6 +41,11 @@ def retry(worker_method, *args, **kwargs):
     max_tries = RETRY_MAX_TRIES
     delay = RETRY_DELAY_TIME  #: in seconds
 
+    # Optional test-mode fast retry: when DOLLY_FAST_RETRY=1 is set in the
+    # environment (e.g., within targeted pytest scopes), skip backoff sleeps.
+    if os.getenv("DOLLY_FAST_RETRY") == "1":
+        delay = 0
+
     #: this inner function (closure? almost-closure?) allows us to keep track of tries without passing it as an arg
     def _inner_retry(worker_method, *args, **kwargs):
         nonlocal tries

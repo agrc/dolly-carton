@@ -4,6 +4,9 @@ testpaths = ["tests"]
 norecursedirs = [".env", "data", "maps", ".github", ".vscode"]
 console_output_style = "count"
 addopts = "--cov-branch --cov=dolly --cov-report term --cov-report xml:cov.xml --instafail"
+markers = [
+    "real_backoff: run retry tests with real backoff timing (disables DOLLY_FAST_RETRY)",
+]
 
 [tool.coverage.run]
 source = ["src/dolly"]

@@ -117,6 +117,12 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - If a test needs to assert different Slack behaviors (e.g., failures, exceptions, multiple parts), it can override the global mock locally by patching `dolly.summary.requests.post` or `ProcessSummary.post_to_slack` within the test scope.
 - Note: `dolly.utils.get_secrets()` returns a mock `SLACK_WEBHOOK_URL` when pytest is running; the global mock ensures no external HTTP calls happen even when that URL is present.
 
+#### Fast retries in tests
+- To keep the test suite fast while preserving production behavior, retries can skip exponential backoff sleeps during tests.
+- The environment variable `DOLLY_FAST_RETRY=1` enables a fast mode in `dolly.utils.retry` that sets the backoff delay to 0 (no sleep). Production runs do not set this variable, so normal backoff applies.
+- An autouse fixture in `tests/conftest.py` sets `DOLLY_FAST_RETRY=1` for most tests. To run with real backoff timing for specific tests, use the marker `@pytest.mark.real_backoff` on the test or class; this disables fast mode for that scope.
+- The `real_backoff` marker is registered in `pyproject.toml`, so no warnings will be emitted. Prefer the marker over manual env manipulation.
+
 ### Code Quality Tools
 - **Format code**: `ruff format .` (takes <1 second)
 - **Check linting**: `ruff check .` (takes <1 second)
