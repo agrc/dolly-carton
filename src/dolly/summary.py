@@ -85,7 +85,9 @@ class ProcessSummary:
         """Add a feature count mismatch error for a table."""
         # Add it as a table error
         self.add_table_error(
-            table, "update", f"Feature count mismatch: {source_count} -> {final_count}"
+            table,
+            "update",
+            f"Feature count mismatch - source: {source_count} -> destination: {final_count}",
         )
 
     def get_total_elapsed_time(self) -> timedelta:
