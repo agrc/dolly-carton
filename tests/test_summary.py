@@ -337,15 +337,11 @@ class TestSummaryGlobalFunctions:
         current = get_current_summary()
         assert current is summary
 
-    @patch("dolly.summary.requests.post")
     @patch("dolly.summary.logger")
-    def test_finish_summary(self, mock_logger, mock_requests_post):
+    def test_finish_summary(self, mock_logger):
         """Test finishing summary."""
         start_time = time.time()
         end_time = start_time + 10
-
-        # Mock Slack requests to prevent actual HTTP calls
-        mock_requests_post.return_value.status_code = 200
 
         # Start a summary
         summary = start_summary(start_time)
@@ -698,14 +694,14 @@ class TestSlackIntegration:
 
             webhook_url = "https://hooks.slack.com/test"
 
+            call_counter = {"n": 0}
+
             def side_effect(*args, **kwargs):
                 # Simulate first request succeeding, second failing
                 mock_response = MagicMock()
-                if not hasattr(side_effect, "call_count"):
-                    side_effect.call_count = 0
-                side_effect.call_count += 1
+                call_counter["n"] += 1
 
-                if side_effect.call_count == 1:
+                if call_counter["n"] == 1:
                     mock_response.status_code = 200
                     mock_response.text = "ok"
                 else:

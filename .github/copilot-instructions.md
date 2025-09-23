@@ -111,6 +111,12 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
   - All other test modules REQUIRE Docker to run
 - **CI/CD Testing**: Pull requests trigger full Docker-based test suite with linting via GitHub Actions
 
+#### Slack notifications in tests
+- Tests may indirectly call `dolly.summary.finish_summary()` (for example, via `_main_logic()` in `dolly.main`), which posts the process summary to Slack if a webhook URL is configured.
+- To prevent any real Slack posts during tests, a global autouse pytest fixture is provided in `tests/conftest.py` that mocks `requests.post` within `dolly.summary` to return a 200 OK by default.
+- If a test needs to assert different Slack behaviors (e.g., failures, exceptions, multiple parts), it can override the global mock locally by patching `dolly.summary.requests.post` or `ProcessSummary.post_to_slack` within the test scope.
+- Note: `dolly.utils.get_secrets()` returns a mock `SLACK_WEBHOOK_URL` when pytest is running; the global mock ensures no external HTTP calls happen even when that URL is present.
+
 ### Code Quality Tools
 - **Format code**: `ruff format .` (takes <1 second)
 - **Check linting**: `ruff check .` (takes <1 second)

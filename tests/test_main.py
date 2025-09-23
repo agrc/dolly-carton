@@ -27,12 +27,10 @@ class TestMain:
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_no_updated_tables(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_table_hashes,
         mock_determine_updated,
@@ -44,7 +42,6 @@ class TestMain:
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {}
         mock_determine_updated.return_value = []
-        mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "5 seconds"
 
         _main_logic()
@@ -67,12 +64,10 @@ class TestMain:
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_only_existing_services(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
@@ -89,9 +84,11 @@ class TestMain:
         mock_get_current_hashes.return_value = {"sgid.society.cemeteries": "h1"}
         mock_determine_updated.return_value = ["sgid.society.cemeteries"]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "10 seconds"
-        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000})
+        mock_create_fgdb.return_value = (
+            Path("/test/output/data.gdb"),
+            {"sgid.society.cemeteries": 1000},
+        )
         mock_zip_and_upload_fgdb.return_value = Mock()
 
         _main_logic()
@@ -109,12 +106,10 @@ class TestMain:
     @patch("dolly.main.publish_new_feature_services")
     @patch("dolly.main.get_agol_items_lookup")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_only_new_services(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_agol_items_lookup,
         mock_publish_new_feature_services,
@@ -129,7 +124,6 @@ class TestMain:
         mock_get_current_hashes.return_value = {"sgid.transportation.roads": "h2"}
         mock_determine_updated.return_value = ["sgid.transportation.roads"]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "15 seconds"
 
         _main_logic()
@@ -147,12 +141,10 @@ class TestMain:
     @patch("dolly.main.create_fgdb")
     @patch("dolly.main.get_agol_items_lookup")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_both_existing_and_new(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_agol_items_lookup,
         mock_create_fgdb,
@@ -176,9 +168,11 @@ class TestMain:
             "sgid.transportation.roads",
         ]
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "20 seconds"
-        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000, "sgid.transportation.roads": 2000})
+        mock_create_fgdb.return_value = (
+            Path("/test/output/data.gdb"),
+            {"sgid.society.cemeteries": 1000, "sgid.transportation.roads": 2000},
+        )
         mock_zip_and_upload_fgdb.return_value = Mock()
 
         _main_logic()
@@ -189,12 +183,10 @@ class TestMain:
     @patch("dolly.main.time.time")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_exception_handling(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_table_hashes,
         mock_time,
@@ -203,7 +195,6 @@ class TestMain:
 
         mock_time.side_effect = [1000.0, 1005.0]
         mock_get_table_hashes.side_effect = Exception("Database error")
-        mock_requests_post.return_value.status_code = 200
 
         with pytest.raises(Exception, match="Database error"):
             _main_logic()
@@ -222,12 +213,10 @@ class TestMain:
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
     @patch("dolly.summary.get_current_summary")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_global_error_recorded_in_summary(
         self,
         mock_logger,
-        mock_requests_post,
         mock_get_current_summary,
         mock_clean_up,
         mock_get_table_hashes,
@@ -237,7 +226,6 @@ class TestMain:
 
         mock_time.side_effect = [1000.0, 1005.0]
         mock_get_table_hashes.side_effect = ValueError("Invalid configuration")
-        mock_requests_post.return_value.status_code = 200
         test_summary = ProcessSummary()
         mock_get_current_summary.return_value = test_summary
 
@@ -254,12 +242,10 @@ class TestMain:
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.get_agol_items_lookup")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_skips_tables_not_in_lookup(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_agol_items_lookup,
         mock_get_table_hashes,
@@ -273,7 +259,6 @@ class TestMain:
         mock_get_current_hashes.return_value = {"sgid.unknown.table": "h1"}
         mock_determine_updated.return_value = ["sgid.unknown.table"]
         mock_get_agol_items_lookup.return_value = {}
-        mock_requests_post.return_value.status_code = 200
         mock_precisedelta.return_value = "5 seconds"
 
         _main_logic()
@@ -291,12 +276,10 @@ class TestMain:
     @patch("dolly.main.determine_updated_tables")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
-    @patch("dolly.summary.requests.post")
     @patch("dolly.main.logger")
     def test_main_cli_tables_parameter(
         self,
         mock_logger,
-        mock_requests_post,
         mock_clean_up,
         mock_get_table_hashes,
         mock_determine_updated,
@@ -308,8 +291,10 @@ class TestMain:
         mock_publish_new_feature_services,
     ):
         mock_get_agol_items_lookup.return_value = self.mock_agol_items_lookup
-        mock_requests_post.return_value.status_code = 200
-        mock_create_fgdb.return_value = (Path("/test/output/data.gdb"), {"sgid.society.cemeteries": 1000})
+        mock_create_fgdb.return_value = (
+            Path("/test/output/data.gdb"),
+            {"sgid.society.cemeteries": 1000},
+        )
         mock_zip_and_upload_fgdb.return_value = Mock()
         mock_get_current_hashes.return_value = {
             "sgid.society.cemeteries": "h1",
