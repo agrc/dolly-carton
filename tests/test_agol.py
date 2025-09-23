@@ -12,11 +12,11 @@ from dolly.agol import (
     _generate_upload_tags,
     _generate_upload_title,
     _get_appropriate_service_layer,
-    _get_gis_connection,
     _get_service_item_from_agol,
     _search_existing_item,
     _truncate_and_append,
     _upload_item_to_agol,
+    get_gis_connection,
 )
 
 
@@ -299,7 +299,7 @@ class TestGetGisConnection:
         mock_gis_instance = Mock()
         mock_gis.return_value = mock_gis_instance
 
-        result = _get_gis_connection()
+        result = get_gis_connection()
 
         # Verify get_secrets was called
         mock_get_secrets.assert_called_once()
@@ -319,19 +319,17 @@ class TestSearchExistingItem:
     """Test cases for the _search_existing_item function."""
 
     @patch("dolly.agol.retry")
-    @patch("dolly.agol._get_gis_connection")
-    def test_successful_search_with_results(self, mock_get_gis, mock_retry):
+    def test_successful_search_with_results(self, mock_retry):
         """Test successful search that finds existing items."""
         # Setup mocks
         mock_gis = Mock()
         mock_gis.users.me.username = "test_user"
-        mock_get_gis.return_value = mock_gis
 
         mock_item = Mock()
         mock_retry.return_value = [mock_item]
 
         title = "Test Title"
-        result = _search_existing_item(title)
+        result = _search_existing_item(title, mock_gis)
 
         # Verify retry was called with correct parameters
         mock_retry.assert_called_once_with(
@@ -365,16 +363,14 @@ class TestSearchExistingItem:
         assert result == []
 
     @patch("dolly.agol.retry")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
-    def test_search_exception_handling(self, mock_logger, mock_get_gis, mock_retry):
+    def test_search_exception_handling(self, mock_logger, mock_retry):
         """Test search exception handling."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_retry.side_effect = Exception("Search failed")
 
         title = "Test Title"
-        result = _search_existing_item(title)
+        result = _search_existing_item(title, mock_gis)
 
         # Verify error logging
         mock_logger.error.assert_called_once_with(
@@ -440,12 +436,10 @@ class TestUploadItemToAgol:
     """Test cases for the _upload_item_to_agol function."""
 
     @patch("dolly.agol.retry")
-    @patch("dolly.agol._get_gis_connection")
-    def test_successful_upload(self, mock_get_gis, mock_retry):
+    def test_successful_upload(self, mock_retry):
         """Test successful item upload."""
         # Setup mocks
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         mock_folder = Mock()
         mock_gis.content.folders.get.return_value = mock_folder
@@ -459,7 +453,7 @@ class TestUploadItemToAgol:
         title = "Test Upload"
         tags = "Test,Tags"
 
-        result = _upload_item_to_agol(zip_path, title, tags)
+        result = _upload_item_to_agol(zip_path, title, tags, mock_gis)
 
         # Verify retry was called with correct parameters
         mock_retry.assert_called_once_with(
@@ -626,10 +620,8 @@ class TestZipAndUploadFgdb:
     @patch("dolly.agol._generate_upload_tags")
     @patch("dolly.agol._generate_upload_title")
     @patch("dolly.agol._create_zip_from_fgdb")
-    @patch("dolly.agol._get_gis_connection")
     def test_zip_and_upload_without_existing_item(
         self,
-        mock_get_gis,
         mock_create_zip,
         mock_generate_title,
         mock_generate_tags,
@@ -646,13 +638,12 @@ class TestZipAndUploadFgdb:
         mock_generate_tags.return_value = "Test,Tags"
         mock_search_existing.return_value = []
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_uploaded_item = Mock()
         mock_upload_item.return_value = mock_uploaded_item
 
         from dolly.agol import zip_and_upload_fgdb
 
-        result = zip_and_upload_fgdb(fgdb_path)
+        result = zip_and_upload_fgdb(fgdb_path, mock_gis)
 
         # Verify all functions were called correctly
         mock_create_zip.assert_called_once_with(fgdb_path)
@@ -726,12 +717,10 @@ class TestUpdateFeatureServices:
     @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_update_feature_services_success(
         self,
         mock_logger,
-        mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
         mock_truncate_and_append,
@@ -743,7 +732,6 @@ class TestUpdateFeatureServices:
         """Test successful update of feature services."""
         # Setup mocks
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         mock_gdb_item = Mock()
         mock_gdb_item.id = "gdb-item-id"
@@ -778,7 +766,12 @@ class TestUpdateFeatureServices:
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
+            mock_gdb_item,
+            tables,
+            agol_items_lookup,
+            current_hashes,
+            source_counts,
+            mock_gis,
         )
 
         # Verify all services were processed
@@ -791,14 +784,12 @@ class TestUpdateFeatureServices:
         mock_logger.info.assert_any_call("deleting temporary FGDB item")
 
     @patch("dolly.agol._get_service_item_from_agol")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_update_feature_services_missing_item(
-        self, mock_logger, mock_get_gis, mock_get_service_item
+        self, mock_logger, mock_get_service_item
     ):
         """Test update when AGOL item is missing."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
@@ -814,21 +805,24 @@ class TestUpdateFeatureServices:
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
+            mock_gdb_item,
+            tables,
+            agol_items_lookup,
+            current_hashes,
+            source_counts,
+            mock_gis,
         )
 
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
 
     @patch("dolly.agol._get_service_item_from_agol")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_update_feature_services_no_gis_connection_provided(
-        self, mock_logger, mock_get_gis, mock_get_service_item
+        self, mock_logger, mock_get_service_item
     ):
         """Test update when no GIS connection is provided (covers line 365)."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
@@ -843,15 +837,14 @@ class TestUpdateFeatureServices:
 
         source_counts = {"sgid.society.cemeteries": 1000}
 
-        # Call without providing gis_connection (None by default)
+        # Call providing gis_connection explicitly
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
-        )
-
-        # Verify _get_gis_connection was called
-        mock_get_gis.assert_called_once()
-        mock_get_service_item.assert_called_once_with(
-            "sgid.society.cemeteries", agol_items_lookup, mock_gis
+            mock_gdb_item,
+            tables,
+            agol_items_lookup,
+            current_hashes,
+            source_counts,
+            mock_gis,
         )
 
     @patch("dolly.agol._count_features_in_agol_service")
@@ -859,12 +852,10 @@ class TestUpdateFeatureServices:
     @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_update_feature_services_append_failure(
         self,
         mock_logger,
-        mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
         mock_truncate_and_append,
@@ -873,7 +864,6 @@ class TestUpdateFeatureServices:
     ):
         """Test update when append operation fails (covers line 390)."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
@@ -899,7 +889,12 @@ class TestUpdateFeatureServices:
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
+            mock_gdb_item,
+            tables,
+            agol_items_lookup,
+            current_hashes,
+            source_counts,
+            mock_gis,
         )
 
         # Verify combined op was called and returned False
@@ -911,12 +906,10 @@ class TestUpdateFeatureServices:
     @patch("dolly.agol._truncate_and_append")
     @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol._get_service_item_from_agol")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_update_feature_services_with_exception(
         self,
         mock_logger,
-        mock_get_gis,
         mock_get_service_item,
         mock_get_service_layer,
         mock_truncate_and_append,
@@ -924,7 +917,6 @@ class TestUpdateFeatureServices:
     ):
         """Test update when an exception occurs during processing."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
         mock_gdb_item = Mock()
 
         tables = ["sgid.society.cemeteries"]
@@ -942,7 +934,12 @@ class TestUpdateFeatureServices:
         from dolly.agol import update_feature_services
 
         update_feature_services(
-            mock_gdb_item, tables, agol_items_lookup, current_hashes, source_counts
+            mock_gdb_item,
+            tables,
+            agol_items_lookup,
+            current_hashes,
+            source_counts,
+            mock_gis,
         )
 
         # Should log the error
@@ -1136,12 +1133,10 @@ class TestPublishNewFeatureServices:
     @patch("dolly.agol.update_agol_item")
     @patch("dolly.agol._configure_published_service")
     @patch("dolly.agol._create_and_publish_service")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_publish_new_feature_services_success(
         self,
         mock_logger,
-        mock_get_gis,
         mock_create_publish,
         mock_configure,
         mock_update_agol_item,
@@ -1150,7 +1145,6 @@ class TestPublishNewFeatureServices:
         """Test successful publishing of new feature services."""
         # Setup mocks
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
         current_hashes = {
@@ -1172,7 +1166,9 @@ class TestPublishNewFeatureServices:
 
         from dolly.agol import publish_new_feature_services
 
-        publish_new_feature_services(tables, agol_items_lookup, current_hashes)
+        publish_new_feature_services(
+            tables, agol_items_lookup, current_hashes, mock_gis
+        )
 
         # Verify all tables were processed
         assert mock_create_publish.call_count == 2
@@ -1191,14 +1187,12 @@ class TestPublishNewFeatureServices:
         mock_update_agol_item.assert_any_call("sgid.transportation.roads", "item2-id")
 
     @patch("dolly.agol._create_and_publish_service")
-    @patch("dolly.agol._get_gis_connection")
     @patch("dolly.agol.logger")
     def test_publish_new_feature_services_creation_failure(
-        self, mock_logger, mock_get_gis, mock_create_publish
+        self, mock_logger, mock_create_publish
     ):
         """Test handling of creation failure."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries"]
         current_hashes = {"sgid.society.cemeteries": "hash1"}
@@ -1210,20 +1204,20 @@ class TestPublishNewFeatureServices:
 
         from dolly.agol import publish_new_feature_services
 
-        publish_new_feature_services(tables, agol_items_lookup, current_hashes)
+        publish_new_feature_services(
+            tables, agol_items_lookup, current_hashes, mock_gis
+        )
 
         # Should continue processing even if creation fails
         mock_create_publish.assert_called_once()
 
     @patch("dolly.agol._configure_published_service")
     @patch("dolly.agol._create_and_publish_service")
-    @patch("dolly.agol._get_gis_connection")
     def test_publish_new_feature_services_configuration_failure(
-        self, mock_get_gis, mock_create_publish, mock_configure
+        self, mock_create_publish, mock_configure
     ):
         """Test handling of configuration failure."""
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         tables = ["sgid.society.cemeteries"]
         current_hashes = {"sgid.society.cemeteries": "hash1"}
@@ -1251,13 +1245,11 @@ class TestCountFeaturesInAgolService:
     @patch("dolly.agol.retry")
     @patch("dolly.agol.Table")
     @patch("dolly.agol.Item")
-    @patch("dolly.agol._get_gis_connection")
     def test_counts_table_features_success(
-        self, mock_get_gis, mock_item_cls, mock_table_cls, mock_retry
+        self, mock_item_cls, mock_table_cls, mock_retry
     ):
         # Arrange
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         mock_item_instance = Mock()
         mock_item_cls.return_value = mock_item_instance
@@ -1271,7 +1263,7 @@ class TestCountFeaturesInAgolService:
         service_item.properties = {"type": "Table", "serviceItemId": "abc123"}
 
         # Act
-        result = _count_features_in_agol_service(service_item)
+        result = _count_features_in_agol_service(service_item, mock_gis)
 
         # Assert
         assert result == 123
@@ -1282,13 +1274,9 @@ class TestCountFeaturesInAgolService:
     @patch("dolly.agol.retry")
     @patch("dolly.agol.FeatureLayer")
     @patch("dolly.agol.Item")
-    @patch("dolly.agol._get_gis_connection")
-    def test_counts_feature_layer_success(
-        self, mock_get_gis, mock_item_cls, mock_fl_cls, mock_retry
-    ):
+    def test_counts_feature_layer_success(self, mock_item_cls, mock_fl_cls, mock_retry):
         # Arrange
         mock_gis = Mock()
-        mock_get_gis.return_value = mock_gis
 
         mock_item_instance = Mock()
         mock_item_cls.return_value = mock_item_instance
@@ -1305,7 +1293,7 @@ class TestCountFeaturesInAgolService:
         }
 
         # Act
-        result = _count_features_in_agol_service(service_item)
+        result = _count_features_in_agol_service(service_item, mock_gis)
 
         # Assert
         assert result == 456
@@ -1316,9 +1304,8 @@ class TestCountFeaturesInAgolService:
     @patch("dolly.agol.logger")
     @patch("dolly.agol.Table")
     @patch("dolly.agol.Item")
-    @patch("dolly.agol._get_gis_connection")
     def test_error_path_returns_negative_one(
-        self, mock_get_gis, mock_item_cls, mock_table_cls, mock_logger
+        self, mock_item_cls, mock_table_cls, mock_logger
     ):
         # Arrange: make fromitem raise
         mock_table_cls.fromitem.side_effect = Exception("boom")
@@ -1327,7 +1314,8 @@ class TestCountFeaturesInAgolService:
         service_item.properties = {"type": "Table", "serviceItemId": "oops"}
 
         # Act
-        result = _count_features_in_agol_service(service_item)
+        mock_gis = Mock()
+        result = _count_features_in_agol_service(service_item, mock_gis)
 
         # Assert
         assert result == -1

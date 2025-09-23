@@ -105,7 +105,7 @@ def _create_zip_from_fgdb(fgdb_path: Path) -> Path:
     return zip_path
 
 
-def _get_gis_connection() -> GIS:
+def get_gis_connection() -> GIS:
     """
     Factory function to create a GIS connection.
 
@@ -121,21 +121,17 @@ def _get_gis_connection() -> GIS:
     )
 
 
-def _search_existing_item(title: str, gis_connection: GIS | None = None) -> list[Item]:
+def _search_existing_item(title: str, gis_connection: GIS) -> list[Item]:
     """
     Search for existing AGOL items by title.
 
     Args:
         title: Title to search for
-        gis_connection: GIS connection (optional, will create new if not provided).
-                       Primarily used for testing to inject mock connections.
+        gis_connection: GIS connection
 
     Returns:
         List of matching items
     """
-    if gis_connection is None:
-        gis_connection = _get_gis_connection()
-
     try:
         return retry(
             gis_connection.content.search,
@@ -177,7 +173,7 @@ def _delete_agol_item(item: Item) -> bool:
 
 
 def _upload_item_to_agol(
-    zip_path: Path, title: str, tags: str, gis_connection: GIS | None = None
+    zip_path: Path, title: str, tags: str, gis_connection: GIS
 ) -> Item:
     """
     Upload a zip file to AGOL as a File Geodatabase item.
@@ -186,15 +182,11 @@ def _upload_item_to_agol(
         zip_path: Path to the zip file to upload
         title: Title for the uploaded item
         tags: Tags for the uploaded item
-        gis_connection: GIS connection (optional, will create new if not provided).
-                       Primarily used for testing to inject mock connections.
+        gis_connection: GIS connection
 
     Returns:
         The uploaded AGOL item
     """
-    if gis_connection is None:
-        gis_connection = _get_gis_connection()
-
     folders = gis_connection.content.folders
     root_folder = folders.get()
     future = retry(
@@ -211,14 +203,13 @@ def _upload_item_to_agol(
     return future.result()
 
 
-def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS | None = None) -> Item:
+def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS) -> Item:
     """
     Zip the FGDB and upload it to AGOL.
 
     Args:
         fgdb_path: Path to the FGDB to zip and upload
-        gis_connection: GIS connection (optional, will create new if not provided).
-                       Primarily used for testing to inject mock connections.
+        gis_connection: GIS connection
 
     Returns:
         The uploaded AGOL item
@@ -226,9 +217,6 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS | None = None) -> I
     zip_path = _create_zip_from_fgdb(fgdb_path)
     title = _generate_upload_title(fgdb_path.stem)
     tags = _generate_upload_tags()
-
-    if gis_connection is None:
-        gis_connection = _get_gis_connection()
 
     search_results = _search_existing_item(title, gis_connection)
 
@@ -241,12 +229,13 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS | None = None) -> I
     return _upload_item_to_agol(zip_path, title, tags, gis_connection)
 
 
-def _count_features_in_agol_service(service_item) -> int:
+def _count_features_in_agol_service(service_item, gis_connection: GIS) -> int:
     """
     Count features in an ArcGIS Online service using the ArcGIS API.
 
     Args:
-        service_item: ArcGIS service item (Table or FeatureLayer)
+    service_item: ArcGIS service item (Table or FeatureLayer)
+    gis_connection: GIS connection to use for fresh item references
 
     Returns:
         Number of features in the service
@@ -255,11 +244,11 @@ def _count_features_in_agol_service(service_item) -> int:
         #: get new reference to item to avoid stale data from AGOL cache
         if service_item.properties["type"] == "Table":
             new_item = Table.fromitem(
-                Item(_get_gis_connection(), service_item.properties["serviceItemId"])
+                Item(gis_connection, service_item.properties["serviceItemId"])
             )
         else:
             new_item = FeatureLayer.fromitem(
-                Item(_get_gis_connection(), service_item.properties["serviceItemId"])
+                Item(gis_connection, service_item.properties["serviceItemId"])
             )
 
         result = retry(new_item.query, return_count_only=True)
@@ -381,7 +370,7 @@ def update_feature_services(
     agol_items_lookup: dict[str, dict],
     current_hashes: dict[str, str],
     source_counts: dict[str, int],
-    gis_connection: GIS | None = None,
+    gis_connection: GIS,
 ) -> None:
     """
     Update feature services in AGOL with new FGDB data.
@@ -392,12 +381,8 @@ def update_feature_services(
         agol_items_lookup: Lookup dictionary with AGOL item information
         current_hashes: Dictionary mapping table names to their current hashes
         source_counts: Dictionary mapping table names to their source feature counts
-        gis_connection: GIS connection (optional, will create new if not provided).
-                       Primarily used for testing to inject mock connections.
+        gis_connection: GIS connection
     """
-    if gis_connection is None:
-        gis_connection = _get_gis_connection()
-
     summary = get_current_summary()
     has_errors = False
     for table in tables:
@@ -420,7 +405,9 @@ def update_feature_services(
             logger.info(f"Updating feature service for {table} with new FGDB data.")
 
             # Count features before truncation
-            pre_truncate_count = _count_features_in_agol_service(service_item)
+            pre_truncate_count = _count_features_in_agol_service(
+                service_item, gis_connection
+            )
             if pre_truncate_count >= 0:
                 logger.info(
                     f"📊 Target service {table} before truncation: {pre_truncate_count:,} features"
@@ -441,7 +428,9 @@ def update_feature_services(
                     summary.add_table_error(table, "update", error_msg)
             else:
                 # Count features after append and compare with source
-                post_append_count = _count_features_in_agol_service(service_item)
+                post_append_count = _count_features_in_agol_service(
+                    service_item, gis_connection
+                )
                 if post_append_count >= 0:
                     logger.info(
                         f"📊 Target service {table} after append: {post_append_count:,} features"
@@ -589,7 +578,7 @@ def publish_new_feature_services(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
     current_hashes: dict[str, str],
-    gis_connection: GIS | None = None,
+    gis_connection: GIS,
 ) -> None:
     """
     Publish new feature services for the provided tables.
@@ -597,12 +586,8 @@ def publish_new_feature_services(
     Args:
         tables: List of table names to publish
         agol_items_lookup: Lookup dictionary with AGOL item information
-        gis_connection: GIS connection (optional, will create new if not provided).
-                       Primarily used for testing to inject mock connections.
+        gis_connection: GIS connection
     """
-    if gis_connection is None:
-        gis_connection = _get_gis_connection()
-
     summary = get_current_summary()
     for table in tables:
         logger.info(f"Publishing new feature service for table {table}")

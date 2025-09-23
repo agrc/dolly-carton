@@ -2,7 +2,7 @@
 
 from unittest.mock import Mock, patch
 
-from dolly.main import clean_up, _main_logic
+from dolly.main import _main_logic, clean_up
 
 
 class TestMainFunctions:
@@ -107,6 +107,7 @@ class TestMainFunctions:
         mock_determine_updated.assert_called_once()
         mock_logger.info.assert_any_call("No updated tables found.")
 
+    @patch("dolly.main.get_gis_connection")
     @patch("dolly.main.start_summary")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.get_current_hashes")
@@ -119,6 +120,7 @@ class TestMainFunctions:
         mock_get_current_hashes,
         mock_clean_up,
         mock_start_summary,
+        mock_get_gis_connection,
     ):
         """Test _main_logic with CLI-provided tables as comma-separated string."""
         mock_time.return_value = 1000.0

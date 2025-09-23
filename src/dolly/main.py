@@ -7,10 +7,10 @@ from typing import Optional
 import google.cloud.logging
 import humanize
 import typer
-from arcgis.gis import GIS
 from osgeo import gdal
 
 from dolly.agol import (
+    get_gis_connection,
     publish_new_feature_services,
     update_feature_services,
     zip_and_upload_fgdb,
@@ -23,7 +23,7 @@ from dolly.internal import (
 )
 from dolly.state import get_table_hashes
 from dolly.summary import finish_summary, start_summary
-from dolly.utils import OUTPUT_PATH, get_secrets
+from dolly.utils import OUTPUT_PATH
 
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
@@ -125,6 +125,8 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
             else:
                 updated_tables_without_existing_services.append(table)
 
+        gis = get_gis_connection()
+
         if len(updated_tables_with_existing_services) > 0:
             logger.info(
                 f"Updating existing feature services for tables: {updated_tables_with_existing_services}"
@@ -134,7 +136,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 updated_tables_with_existing_services,
                 agol_items_lookup,
             )
-            gdb_item = zip_and_upload_fgdb(fgdb_path)
+            gdb_item = zip_and_upload_fgdb(fgdb_path, gis)
 
             update_feature_services(
                 gdb_item,
@@ -142,6 +144,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 agol_items_lookup,
                 current_hashes,
                 source_counts,
+                gis,
             )
         else:
             logger.info("No existing feature services to update.")
@@ -151,6 +154,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 updated_tables_without_existing_services,
                 agol_items_lookup,
                 current_hashes,
+                gis,
             )
         else:
             logger.info("No new feature services to publish.")
@@ -201,12 +205,7 @@ def cleanup_dev_agol_items() -> None:
         if APP_ENVIRONMENT != "dev":
             raise ValueError("This command should only be run in dev environment!")
 
-        secrets = get_secrets()
-        gis = GIS(
-            "https://utah.maps.arcgis.com",
-            username=secrets["AGOL_USERNAME"],
-            password=secrets["AGOL_PASSWORD"],
-        )
+        gis = get_gis_connection()
         agol_items_lookup = get_agol_items_lookup()
 
         for table in agol_items_lookup:
