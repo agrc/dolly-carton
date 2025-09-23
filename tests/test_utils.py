@@ -676,6 +676,7 @@ class TestGetSecrets:
         mock_json_loads.assert_called_once_with(nested_json_str)
 
 
+@pytest.mark.real_backoff
 class TestRetry:
     """Test cases for the retry function."""
 

@@ -36,3 +36,17 @@ def mock_slack_webhook(monkeypatch):
 
     # Yield to allow tests to run with the patched function
     yield
+
+
+@pytest.fixture(autouse=True)
+def fast_retry_for_tests(monkeypatch, request):
+    """Enable fast retries for tests by default.
+
+    Sets DOLLY_FAST_RETRY=1 for all tests to avoid exponential backoff sleeps
+    and speed up the suite. Skip this for tests marked with @pytest.mark.real_backoff
+    """
+    if request.node.get_closest_marker("real_backoff") is not None:
+        monkeypatch.delenv("DOLLY_FAST_RETRY", raising=False)
+        return
+
+    monkeypatch.setenv("DOLLY_FAST_RETRY", "1")
