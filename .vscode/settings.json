@@ -46,6 +46,7 @@
     "pyproject",
     "pytest",
     "PYTHONUNBUFFERED",
+    "retryable",
     "robbyrussell",
     "rptyr",
     "ryanluker",
