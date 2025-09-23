@@ -252,11 +252,19 @@ def _count_features_in_agol_service(service_item) -> int:
         Number of features in the service
     """
     try:
-        # Use the query method to get feature count
-        # query with return_count_only=True is the most efficient way
-        result = retry(service_item.query, return_count_only=True)
-        count = result
-        return count
+        #: get new reference to item to avoid stale data from AGOL cache
+        if service_item.properties["type"] == "Table":
+            new_item = Table.fromitem(
+                Item(_get_gis_connection(), service_item.properties["serviceItemId"])
+            )
+        else:
+            new_item = FeatureLayer.fromitem(
+                Item(_get_gis_connection(), service_item.properties["serviceItemId"])
+            )
+
+        result = retry(new_item.query, return_count_only=True)
+
+        return result
     except Exception as e:
         logger.error(f"Failed to count features in AGOL service: {e}", exc_info=True)
         return -1
