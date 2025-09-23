@@ -30,7 +30,7 @@ class TestFeatureCountIntegration:
 
         # Verify it shows up in update errors
         assert any(
-            "Feature count mismatch: 1000 -> 999" in error
+            "Feature count mismatch - source: 1000 -> destination: 999" in error
             for error in summary.update_errors
         )
 
