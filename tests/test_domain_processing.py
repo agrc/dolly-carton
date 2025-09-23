@@ -49,11 +49,11 @@ class TestDomainProcessing:
         # Mock domain processing
         field_domains = {"field1": "domain1", "field2": "domain2"}
         mock_get_table_field_domains.return_value = field_domains
-        
+
         all_domains = {
             "domain1": {"type": "coded", "values": {"A": "Apple"}},
             "domain2": {"type": "range", "min": 0, "max": 100},
-            "unused_domain": {"type": "coded", "values": {"X": "Unused"}}
+            "unused_domain": {"type": "coded", "values": {"X": "Unused"}},
         }
         mock_get_domain_metadata.return_value = all_domains
 
@@ -83,13 +83,15 @@ class TestDomainProcessing:
         # Verify domain processing was called
         mock_get_table_field_domains.assert_called_once()
         mock_get_domain_metadata.assert_called_once_with(mock_db_connection)
-        
+
         # Verify only used domains were processed
         expected_domains = {
             "domain1": {"type": "coded", "values": {"A": "Apple"}},
-            "domain2": {"type": "range", "min": 0, "max": 100}
+            "domain2": {"type": "range", "min": 0, "max": 100},
         }
-        mock_create_domains.assert_called_once_with(expected_domains, "/test/output.gdb")
+        mock_create_domains.assert_called_once_with(
+            expected_domains, "/test/output.gdb"
+        )
         mock_apply_domains.assert_called_once()
 
     @patch("dolly.internal._count_features_in_fgdb_layer")
