@@ -29,16 +29,22 @@ APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 logger = logging.getLogger(__name__)
 
-if APP_ENVIRONMENT != "dev":
-    client = google.cloud.logging.Client()
-    client.setup_logging(log_level=logging.DEBUG)
-else:
-    logging.basicConfig(level=logging.INFO)
-
-logger.info(f"App environment: {APP_ENVIRONMENT}")
 
 #: throw exceptions on errors rather than returning None
 gdal.UseExceptions()
+
+
+def setup_logging() -> None:
+    """
+    Sets up logging to Google Cloud Logging if not in dev environment.
+    """
+    if APP_ENVIRONMENT != "dev":
+        client = google.cloud.logging.Client()
+        client.setup_logging(log_level=logging.DEBUG)
+    else:
+        logging.basicConfig(level=logging.INFO)
+
+    logger.info(f"App environment: {APP_ENVIRONMENT}")
 
 
 def clean_up() -> None:
@@ -179,6 +185,8 @@ def main(
     The actual business logic is implemented in _main_logic() to enable easier unit testing
     without dealing with Typer's CLI framework complexities.
     """
+    setup_logging()
+
     _main_logic(tables)
 
 
