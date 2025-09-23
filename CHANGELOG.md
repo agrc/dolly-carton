@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.5](https://github.com/agrc/dolly-carton/compare/v1.0.4...v1.0.5) (2025-09-23)
+
+
+### Bug Fixes
+
+* disable cache when verifying feature counts after updating feature service ([29a7570](https://github.com/agrc/dolly-carton/commit/29a7570dcca8d637733a2ea3ccec42335e304f3c))
+* use native logging in GCP ([9faef88](https://github.com/agrc/dolly-carton/commit/9faef888217378c52aa05e9aed945847fe0bcc12))
+
 ## [1.0.4](https://github.com/agrc/dolly-carton/compare/v1.0.3...v1.0.4) (2025-09-22)
 
 
