@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.6](https://github.com/agrc/dolly-carton/compare/v1.0.5...v1.0.6) (2025-09-24)
+
+
+### Bug Fixes
+
+* get new gis connection when counting features in service ([cff15c1](https://github.com/agrc/dolly-carton/commit/cff15c1e99875c92c6b38c13553589b40afbcf49))
+
 ## [1.0.5](https://github.com/agrc/dolly-carton/compare/v1.0.4...v1.0.5) (2025-09-23)
 
 
