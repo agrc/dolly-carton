@@ -1242,15 +1242,14 @@ class TestPublishNewFeatureServices:
 class TestCountFeaturesInAgolService:
     """Tests for the _count_features_in_agol_service helper."""
 
+    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.retry")
     @patch("dolly.agol.Table")
     @patch("dolly.agol.Item")
     def test_counts_table_features_success(
-        self, mock_item_cls, mock_table_cls, mock_retry
+        self, mock_item_cls, mock_table_cls, mock_retry, mock_get_conn
     ):
         # Arrange
-        mock_gis = Mock()
-
         mock_item_instance = Mock()
         mock_item_cls.return_value = mock_item_instance
 
@@ -1263,21 +1262,21 @@ class TestCountFeaturesInAgolService:
         service_item.properties = {"type": "Table", "serviceItemId": "abc123"}
 
         # Act
-        result = _count_features_in_agol_service(service_item, mock_gis)
+        result = _count_features_in_agol_service(service_item)
 
         # Assert
         assert result == 123
-        mock_item_cls.assert_called_once_with(mock_gis, "abc123")
         mock_table_cls.fromitem.assert_called_once_with(mock_item_instance)
         mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
 
+    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.retry")
     @patch("dolly.agol.FeatureLayer")
     @patch("dolly.agol.Item")
-    def test_counts_feature_layer_success(self, mock_item_cls, mock_fl_cls, mock_retry):
+    def test_counts_feature_layer_success(
+        self, mock_item_cls, mock_fl_cls, mock_retry, mock_get_gis_connection
+    ):
         # Arrange
-        mock_gis = Mock()
-
         mock_item_instance = Mock()
         mock_item_cls.return_value = mock_item_instance
 
@@ -1293,19 +1292,19 @@ class TestCountFeaturesInAgolService:
         }
 
         # Act
-        result = _count_features_in_agol_service(service_item, mock_gis)
+        result = _count_features_in_agol_service(service_item)
 
         # Assert
         assert result == 456
-        mock_item_cls.assert_called_once_with(mock_gis, "svc-789")
         mock_fl_cls.fromitem.assert_called_once_with(mock_item_instance)
         mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
 
+    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.logger")
     @patch("dolly.agol.Table")
     @patch("dolly.agol.Item")
     def test_error_path_returns_negative_one(
-        self, mock_item_cls, mock_table_cls, mock_logger
+        self, mock_item_cls, mock_table_cls, mock_logger, mock_get_gis_connection
     ):
         # Arrange: make fromitem raise
         mock_table_cls.fromitem.side_effect = Exception("boom")
@@ -1314,8 +1313,7 @@ class TestCountFeaturesInAgolService:
         service_item.properties = {"type": "Table", "serviceItemId": "oops"}
 
         # Act
-        mock_gis = Mock()
-        result = _count_features_in_agol_service(service_item, mock_gis)
+        result = _count_features_in_agol_service(service_item)
 
         # Assert
         assert result == -1

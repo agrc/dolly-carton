@@ -229,7 +229,7 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS) -> Item:
     return _upload_item_to_agol(zip_path, title, tags, gis_connection)
 
 
-def _count_features_in_agol_service(service_item, gis_connection: GIS) -> int:
+def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
     """
     Count features in an ArcGIS Online service using the ArcGIS API.
 
@@ -241,14 +241,14 @@ def _count_features_in_agol_service(service_item, gis_connection: GIS) -> int:
         Number of features in the service
     """
     try:
-        #: get new reference to item to avoid stale data from AGOL cache
+        #: get new gis connection and item reference to avoid stale data from AGOL cache
         if service_item.properties["type"] == "Table":
             new_item = Table.fromitem(
-                Item(gis_connection, service_item.properties["serviceItemId"])
+                Item(get_gis_connection(), service_item.properties["serviceItemId"])
             )
         else:
             new_item = FeatureLayer.fromitem(
-                Item(gis_connection, service_item.properties["serviceItemId"])
+                Item(get_gis_connection(), service_item.properties["serviceItemId"])
             )
 
         result = retry(new_item.query, return_count_only=True)
@@ -405,9 +405,7 @@ def update_feature_services(
             logger.info(f"Updating feature service for {table} with new FGDB data.")
 
             # Count features before truncation
-            pre_truncate_count = _count_features_in_agol_service(
-                service_item, gis_connection
-            )
+            pre_truncate_count = _count_features_in_agol_service(service_item)
             if pre_truncate_count >= 0:
                 logger.info(
                     f"📊 Target service {table} before truncation: {pre_truncate_count:,} features"
@@ -428,9 +426,7 @@ def update_feature_services(
                     summary.add_table_error(table, "update", error_msg)
             else:
                 # Count features after append and compare with source
-                post_append_count = _count_features_in_agol_service(
-                    service_item, gis_connection
-                )
+                post_append_count = _count_features_in_agol_service(service_item)
                 if post_append_count >= 0:
                     logger.info(
                         f"📊 Target service {table} after append: {post_append_count:,} features"
