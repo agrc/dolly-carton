@@ -18,6 +18,7 @@
     "delenv",
     "deqmap",
     "docstrings",
+    "dotenv",
     "DUPS",
     "fgdb",
     "firestore",

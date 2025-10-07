@@ -7,7 +7,10 @@ from typing import Optional
 import google.cloud.logging
 import humanize
 import typer
+from dotenv import load_dotenv
 from osgeo import gdal
+
+load_dotenv()
 
 from dolly.agol import (
     get_gis_connection,
