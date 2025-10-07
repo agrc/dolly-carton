@@ -44,8 +44,8 @@ def setup_logging() -> None:
     if APP_ENVIRONMENT != "dev":
         client = google.cloud.logging.Client()
         client.setup_logging(log_level=logging.DEBUG)
-    else:
-        logging.basicConfig(level=logging.INFO)
+
+    logging.basicConfig(level=logging.INFO)
 
     logger.info(f"App environment: {APP_ENVIRONMENT}")
 
