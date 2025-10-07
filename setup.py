@@ -14,7 +14,7 @@ setup(
     version="1.0.6",
     license="MIT",
     description="Project description.",
-    long_description=(Path(__file__).parent / "README.md").read_text(),
+    # long_description=(Path(__file__).parent / "README.md").read_text(),
     long_description_content_type="text/markdown",
     author="UGRC",
     author_email="ugrc-developers@utah.gov",
