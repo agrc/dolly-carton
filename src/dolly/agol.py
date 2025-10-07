@@ -1,7 +1,7 @@
 import logging
 import os
+import zipfile
 from pathlib import Path
-from shutil import make_archive
 from typing import cast
 
 from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
@@ -93,13 +93,17 @@ def _create_zip_from_fgdb(fgdb_path: Path) -> Path:
     Returns:
         Path to the created zip file
     """
-    make_archive(
-        str(fgdb_path.with_suffix("")),
-        "zip",
-        root_dir=fgdb_path.parent,
-        base_dir=fgdb_path.name,
-    )
     zip_path = fgdb_path.with_suffix(".zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(fgdb_path):
+            for file in files:
+                # skip any .lock files created by arcpy
+                if file.endswith(".lock"):
+                    continue
+                file_path = Path(root) / file
+                rel_path = str(file_path.relative_to(fgdb_path.parent))
+                zip_file.write(str(file_path), rel_path)
+
     logger.info(f"FGDB zipped to {zip_path}")
 
     return zip_path

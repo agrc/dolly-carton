@@ -5,6 +5,7 @@ from pathlib import Path
 from textwrap import dedent
 from typing import cast
 
+import arcpy
 import pyodbc
 from osgeo import gdal
 
@@ -66,6 +67,29 @@ def _get_gdal_connection() -> gdal.Dataset:
     #: I could not get this to work with the open_options parameter
     with gdal.config_options({"MSSQLSPATIAL_LIST_ALL_TABLES": "YES"}):
         return gdal.OpenEx(f"MSSQL:{CONNECTION_STRING}", gdal.OF_VECTOR)
+
+
+def _get_internal_connection() -> Path:
+    """
+    Factory function to create an .sde connection file for ArcPy.
+
+    Returns:
+        Path: Path to the .sde connection file
+    """
+    sde_path = OUTPUT_PATH / "internal.sde"
+    if not sde_path.exists():
+        arcpy.management.CreateDatabaseConnection(
+            out_folder_path=str(OUTPUT_PATH),
+            out_name="internal.sde",
+            database_platform="SQL_SERVER",
+            instance=host,
+            account_authentication="DATABASE_AUTH",
+            username=username,
+            password=password,
+            database=database,
+        )
+
+    return sde_path
 
 
 def _generate_output_path(
@@ -402,7 +426,7 @@ def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
 
 
 def _copy_table_to_fgdb(
-    gdal_connection: gdal.Dataset,
+    internal: Path,
     table: str,
     output_path: Path,
     agol_item_info: dict,
@@ -422,10 +446,18 @@ def _copy_table_to_fgdb(
     logger.info(f"Copying layer {table} to FGDB.")
 
     try:
-        gdal_options = _prepare_gdal_options(table, agol_item_info)
+        if not arcpy.Exists(str(output_path)):
+            logger.debug(f"Creating FGDB at {output_path}")
+            arcpy.management.CreateFileGDB(
+                out_folder_path=str(output_path.parent),
+                out_name=output_path.name,
+            )
 
-        gdal.VectorTranslate(
-            destNameOrDestDS=str(output_path), srcDS=gdal_connection, **gdal_options
+        arcpy.management.Project(
+            str(internal / table),
+            str(output_path / get_service_from_title(agol_item_info["published_name"])),
+            out_coor_system=arcpy.SpatialReference(3857),
+            transform_method="NAD_1983_To_WGS_1984_5",
         )
 
         logger.info(f"Successfully copied layer {table} to FGDB.")
@@ -455,14 +487,9 @@ def create_fgdb(
         Tuple of (Path to the created FGDB, dictionary mapping table names to source feature counts)
     """
     # Use provided connection or create a new one
-    if gdal_connection is None:
-        internal = _get_gdal_connection()
-    else:
-        internal = gdal_connection
+    internal = _get_internal_connection()
 
     try:
-        logger.debug(f"Total layers found in internal: {internal.GetLayerCount()}")
-
         if len(tables) == 0:
             raise ValueError("No tables provided to create FGDB.")
 

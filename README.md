@@ -18,15 +18,18 @@ This is a GCP Cloud Run job that is kicked off from the [AGOL Forklift pallet](h
 Change detection is done at the table level using the `hash` column in `SGID.Meta.ChangeDetection`.
 
 Production:
+
 - A Firestore document maintains a map of table names to their last successfully published hash.
 - Current hashes are queried; any mismatch (or missing entry) marks the table for processing.
 - After a table finishes successfully its hash is written back; failed tables are left untouched and will be retried next run.
 
 Dev / Staging:
+
 - The file `src/dolly/dev_mocks.json` contains an `updated_tables` list that simulates which tables have “changed”. Deterministic fake hashes (e.g. `dev-hash-0`) are generated for testing logic.
 - The firestore document is updated with fake hashes. In dev this happens in the firestore emulator.
 
 CLI override:
+
 - You can bypass automatic change detection with `--tables` to force specific tables to process. Their current hashes are then stored (staging/prod) after success.
 
 Firestore structure (staging/prod):
@@ -44,6 +47,10 @@ Collection: dolly-carton
 This enables reliable retry semantics: only fully successful tables advance their stored hash.
 
 ## Setup
+
+`pip install -e .[tests]`
+`npm i -g firebase-tools`
+`firebase emulators:start --only firestore --project demo-test`
 
 Open project in VS Code and select "Reopen in Container"
 
