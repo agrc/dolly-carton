@@ -453,12 +453,24 @@ def _copy_table_to_fgdb(
                 out_name=output_path.name,
             )
 
-        arcpy.management.Project(
-            str(internal / table),
-            str(output_path / get_service_from_title(agol_item_info["published_name"])),
-            out_coor_system=arcpy.SpatialReference(3857),
-            transform_method="NAD_1983_To_WGS_1984_5",
-        )
+        if agol_item_info["geometry_type"].upper() != "STAND ALONE":
+            logger.debug(f"arcpy to copy table {table} to FGDB at {output_path}")
+            arcpy.conversion.TableToTable(
+                str(internal / table),
+                str(output_path),
+                get_service_from_title(agol_item_info["published_name"]),
+            )
+        else:
+            logger.debug(f"Using ArcPy to project {table} to FGDB at {output_path}")
+            arcpy.management.Project(
+                str(internal / table),
+                str(
+                    output_path
+                    / get_service_from_title(agol_item_info["published_name"])
+                ),
+                out_coor_system=arcpy.SpatialReference(3857),
+                transform_method="NAD_1983_To_WGS_1984_5",
+            )
 
         logger.info(f"Successfully copied layer {table} to FGDB.")
 
