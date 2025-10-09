@@ -453,15 +453,15 @@ def _copy_table_to_fgdb(
                 out_name=output_path.name,
             )
 
-        if agol_item_info["geometry_type"].upper() != "STAND ALONE":
-            logger.debug(f"arcpy to copy table {table} to FGDB at {output_path}")
+        if agol_item_info["geometry_type"].upper() == "STAND ALONE":
+            logger.debug(f"Using arcpy to copy table {table} to FGDB at {output_path}")
             arcpy.conversion.TableToTable(
                 str(internal / table),
                 str(output_path),
                 get_service_from_title(agol_item_info["published_name"]),
             )
         else:
-            logger.debug(f"Using ArcPy to project {table} to FGDB at {output_path}")
+            logger.debug(f"Using arcpy to project {table} to FGDB at {output_path}")
             arcpy.management.Project(
                 str(internal / table),
                 str(
