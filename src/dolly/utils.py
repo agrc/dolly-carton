@@ -12,7 +12,7 @@ module_logger = logging.getLogger(__name__)
 RETRY_MAX_TRIES = 3
 RETRY_DELAY_TIME = 2
 
-OUTPUT_PATH = Path("output")
+OUTPUT_PATH = Path(r"D:\dolly-carton\output")
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
