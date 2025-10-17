@@ -87,7 +87,7 @@ class ProcessSummary:
         self.add_table_error(
             table,
             "update",
-            f"Feature count mismatch - source: {source_count} -> destination: {final_count}",
+            f"Feature count mismatch - source (internal): {source_count} -> destination (AGOL): {final_count}",
         )
 
     def get_total_elapsed_time(self) -> timedelta:

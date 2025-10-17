@@ -193,11 +193,13 @@ class TestProcessSummary:
         assert "sgid.test.table1" in summary.tables_with_errors
         assert "sgid.test.table2" in summary.tables_with_errors
         assert any(
-            "Feature count mismatch - source: 1000 -> destination: 999" in error
+            "Feature count mismatch - source (internal): 1000 -> destination (AGOL): 999"
+            in error
             for error in summary.update_errors
         )
         assert any(
-            "Feature count mismatch - source: 500 -> destination: 501" in error
+            "Feature count mismatch - source (internal): 500 -> destination (AGOL): 501"
+            in error
             for error in summary.update_errors
         )
 
@@ -316,7 +318,7 @@ class TestProcessSummary:
         # Feature count mismatches should appear in update errors
         mock_logger.info.assert_any_call("📝 Update errors:")
         mock_logger.info.assert_any_call(
-            "   • sgid.test.table1: Feature count mismatch - source: 1000 -> destination: 999"
+            "   • sgid.test.table1: Feature count mismatch - source (internal): 1000 -> destination (AGOL): 999"
         )
         # Feature count mismatches should result in error status
         mock_logger.info.assert_any_call("🟡 Process completed with errors")
@@ -452,9 +454,13 @@ class TestSlackIntegration:
         # Check that mismatches appear in update errors
         assert "*🔧 Update Error Details:*" in message_str
         assert (
-            "Feature count mismatch - source: 1000 -> destination: 999" in message_str
+            "Feature count mismatch - source (internal): 1000 -> destination (AGOL): 999"
+            in message_str
         )
-        assert "Feature count mismatch - source: 500 -> destination: 501" in message_str
+        assert (
+            "Feature count mismatch - source (internal): 500 -> destination (AGOL): 501"
+            in message_str
+        )
         # Ensure separate feature count mismatches section is NOT present
         assert "📊 *Feature Count Mismatches:*" not in message_str
 
