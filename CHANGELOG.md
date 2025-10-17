@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.7](https://github.com/agrc/dolly-carton/compare/v1.0.6...v1.0.7) (2025-10-17)
+
+
+### Bug Fixes
+
+* make summary report feature counts more clear ([3cc1d68](https://github.com/agrc/dolly-carton/commit/3cc1d68944950812281648a631dbdcb0b6b13d39))
+
 ## [1.0.6](https://github.com/agrc/dolly-carton/compare/v1.0.5...v1.0.6) (2025-09-24)
 
 
