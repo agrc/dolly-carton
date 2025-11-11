@@ -98,7 +98,8 @@ RUN cp /app/src/dolly/secrets/secrets_template.json /app/src/dolly/secrets/secre
 
 # use -e so that the secrets file will be used in the tests
 # Configure pip to handle SSL issues in CI environments
-RUN pip install -e .[tests] --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
+# --ignore-installed numpy is needed to avoid conflicts with the numpy version pre-installed in the gdal image
+RUN pip install -e .[tests] --break-system-packages --ignore-installed numpy --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
 
 
 FROM base AS prod
@@ -107,7 +108,8 @@ COPY . /app
 
 WORKDIR /app
 
-# Configure pip to handle SSL issues in CI environments  
-RUN pip install . --break-system-packages --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
+# Configure pip to handle SSL issues in CI environments
+# --ignore-installed numpy is needed to avoid conflicts with the numpy version pre-installed in the gdal image
+RUN pip install . --break-system-packages --ignore-installed numpy --trusted-host pypi.org --trusted-host pypi.python.org --trusted-host files.pythonhosted.org
 
 CMD ["dolly"]
