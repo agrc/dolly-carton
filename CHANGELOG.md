@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.0.7](https://github.com/agrc/dolly-carton/compare/v1.0.6...v1.0.7) (2025-11-11)
+
+
+### Bug Fixes
+
+* make summary report feature counts more clear ([3cc1d68](https://github.com/agrc/dolly-carton/commit/3cc1d68944950812281648a631dbdcb0b6b13d39))
+
+
+### Dependencies
+
+* **dev:** update pytest-cov requirement from ==6.* to &gt;=6,&lt;8 ([c89dbac](https://github.com/agrc/dolly-carton/commit/c89dbac4f1247bd68a200ae9d3bf1047d447bcf6))
+* **docker:** bump osgeo/gdal in the docker-dependencies group ([c99de91](https://github.com/agrc/dolly-carton/commit/c99de9122de3cf4be428233125c45e9f231cf3c1))
+
 ## [1.0.6](https://github.com/agrc/dolly-carton/compare/v1.0.5...v1.0.6) (2025-09-24)
 
 
