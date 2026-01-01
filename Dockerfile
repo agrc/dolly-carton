@@ -1,5 +1,5 @@
 # full is required for MSSQL support in GDAL
-FROM ghcr.io/osgeo/gdal:ubuntu-full-3.11.4 AS base
+FROM ghcr.io/osgeo/gdal:ubuntu-full-3.12.1 AS base
 
 # Set environment variables to prevent interactive prompts during apt-get install
 ENV DEBIAN_FRONTEND=noninteractive \
