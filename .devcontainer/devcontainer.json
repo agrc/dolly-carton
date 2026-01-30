@@ -30,6 +30,6 @@
       }
     }
   },
-  "postCreateCommand": "pip install -e .[tests] --break-system-packages",
+  "postCreateCommand": "pip install -e .[tests] --break-system-packages --ignore-installed numpy",
   "forwardPorts": [8080, 4000, 9150]
 }
