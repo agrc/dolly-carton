@@ -44,6 +44,7 @@ setup(
         "humanize==4.*",
         "pyodbc==5.*",
         "requests==2.*",
+        "ugrc-supervisor==3.*",
         "typer==0.*",
     ],
     extras_require={

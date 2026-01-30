@@ -1,10 +1,9 @@
 """Tests for the summary module."""
 
+import json
 import time
 from datetime import timedelta
 from unittest.mock import MagicMock, patch
-
-import requests
 
 from dolly.summary import (
     ProcessSummary,
@@ -144,43 +143,6 @@ class TestProcessSummary:
         summary.add_table_published("sgid.test.table1", "different_id")
         assert len(summary.tables_published) == 3
         assert len(summary.published_item_ids) == 3
-
-    def test_create_item_text_with_link(self):
-        """Test _create_item_text method with AGOL item ID."""
-        summary = ProcessSummary()
-
-        # Test with item_id - should create a link
-        result = summary._create_item_text(
-            "sgid.test.table1",
-            "583c0f4888d44f0a90791282b2a69829",
-            title="✅ *Updated Tables*",
-        )
-        expected = "• <https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829|`sgid.test.table1`>\n"
-        assert result == expected
-
-        # Test without item_id - should fall back to plain text
-        result = summary._create_item_text(
-            "sgid.test.table2", None, title="✅ *Updated Tables*"
-        )
-        expected = "• `sgid.test.table2`\n"
-        assert result == expected
-
-        # Test with custom prefix
-        result = summary._create_item_text(
-            "sgid.test.table3",
-            "abcd1234567890123456789012345678",
-            prefix="✓",
-            title="✅ *Updated Tables*",
-        )
-        expected = "✓ <https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678|`sgid.test.table3`>\n"
-        assert result == expected
-
-        # Test error message formatting
-        result = summary._create_item_text(
-            "table1: Connection timeout", None, title="*🔧 Update Error Details:*"
-        )
-        expected = "• table1: Connection timeout\n"
-        assert result == expected
 
     def test_add_feature_count_mismatch(self):
         """Test adding feature count mismatches."""
@@ -370,172 +332,144 @@ class TestSummaryGlobalFunctions:
 class TestSlackIntegration:
     """Test cases for Slack integration functionality."""
 
-    def test_format_slack_message_success(self):
-        """Test formatting a successful process summary as Slack message."""
+    def test_build_slack_messages_success(self):
+        """Test building a successful process summary as Slack messages."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
         summary.add_table_updated("sgid.test.table1", None)
         summary.add_table_published("sgid.test.table1", None)
 
-        message = summary.format_slack_message()
+        messages = summary.build_slack_messages()
 
-        assert "blocks" in message
-        assert len(message["blocks"]) > 0
+        assert len(messages) == 1
+        payload = json.loads(messages[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Convert message to string for easier testing
-        message_str = str(message)
-        assert "🟢 *Status:* Process completed successfully" in message_str
-        assert "sgid.test.table1" in message_str
-        assert "Global errors: *0*" in message_str
+        assert "🟢 *Status:* Process completed successfully" in payload_str
+        assert "sgid.test.table1" in payload_str
+        assert "Global errors: *0*" in payload_str
 
-    def test_format_slack_message_with_errors(self):
-        """Test formatting a process summary with errors as Slack message."""
+    def test_build_slack_messages_with_errors(self):
+        """Test building a process summary with errors as Slack messages."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
         summary.add_table_error("sgid.test.table1", "update", "Connection failed")
 
-        message = summary.format_slack_message()
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Convert message to string for easier testing
-        message_str = str(message)
-        assert "🟡 *Status:* Process completed with errors" in message_str
-        assert "sgid.test.table1" in message_str
-        assert "Global errors: *0*" in message_str
+        assert "🟡 *Status:* Process completed with errors" in payload_str
+        assert "sgid.test.table1" in payload_str
+        assert "Global errors: *0*" in payload_str
 
-    def test_format_slack_message_no_tables(self):
-        """Test formatting a summary with no tables processed."""
+    def test_build_slack_messages_no_tables(self):
+        """Test building a summary with no tables processed."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
 
-        message = summary.format_slack_message()
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Convert message to string for easier testing
-        message_str = str(message)
         assert (
             "🔵 *Status:* Process completed - no tables required processing"
-            in message_str
+            in payload_str
         )
-        assert "Global errors: *0*" in message_str
+        assert "Global errors: *0*" in payload_str
 
-    def test_format_slack_message_with_global_errors(self):
-        """Test formatting a process summary with global errors as Slack message."""
+    def test_build_slack_messages_with_global_errors(self):
+        """Test building a process summary with global errors as Slack messages."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
         summary.add_global_error("ValueError: Invalid configuration")
         summary.add_global_error("ConnectionError: Database unavailable")
 
-        message = summary.format_slack_message()
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Convert message to string for easier testing
-        message_str = str(message)
-        assert "🔴 *Status:* Process failed due to global errors" in message_str
-        assert "Global errors: *2*" in message_str
-        assert "🚨 *Global Errors (Process Failed):*" in message_str
-        assert "ValueError: Invalid configuration" in message_str
-        assert "ConnectionError: Database unavailable" in message_str
+        assert "🔴 *Status:* Process failed due to global errors" in payload_str
+        assert "Global errors: *2*" in payload_str
+        assert "🚨 *Global Errors (Process Failed):*" in payload_str
+        assert "ValueError: Invalid configuration" in payload_str
+        assert "ConnectionError: Database unavailable" in payload_str
 
-    def test_format_slack_message_with_feature_count_mismatches(self):
-        """Test formatting Slack message with feature count mismatches."""
+    def test_build_slack_messages_with_feature_count_mismatches(self):
+        """Test building Slack messages with feature count mismatches."""
         summary = ProcessSummary()
         summary.add_table_updated("sgid.test.table1", None)
         summary.add_feature_count_mismatch("sgid.test.table1", 1000, 999)
         summary.add_feature_count_mismatch("sgid.test.table2", 500, 501)
 
-        message = summary.format_slack_message()
-        message_str = str(message)
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Check status shows errors due to mismatches
-        assert "🟡" in message_str
-        assert "completed with errors" in message_str
-        # Check that mismatches appear in update errors
-        assert "*🔧 Update Error Details:*" in message_str
+        assert "🟡" in payload_str
+        assert "completed with errors" in payload_str
+        assert "*🔧 Update Error Details:*" in payload_str
         assert (
             "Feature count mismatch - source (internal): 1000 -> destination (AGOL): 999"
-            in message_str
+            in payload_str
         )
         assert (
             "Feature count mismatch - source (internal): 500 -> destination (AGOL): 501"
-            in message_str
+            in payload_str
         )
-        # Ensure separate feature count mismatches section is NOT present
-        assert "📊 *Feature Count Mismatches:*" not in message_str
+        assert "📊 *Feature Count Mismatches:*" not in payload_str
 
-    @patch("dolly.summary.requests.post")
-    def test_post_to_slack_success(self, mock_post):
-        """Test successful posting to Slack."""
-        mock_response = MagicMock()
-        mock_response.status_code = 200
-        mock_post.return_value = mock_response
-
+    def test_build_slack_messages_with_many_updated_tables(self):
+        """Test building Slack messages with a long list of updated tables."""
         summary = ProcessSummary()
-        result = summary.post_to_slack("https://hooks.slack.com/test")
+        summary.start_time = 100.0
+        summary.end_time = 110.0
 
-        assert result is True
-        mock_post.assert_called_once()
+        for index in range(30):
+            table_name = f"sgid.test.table{index}"
+            item_id = f"{index:02d}" * 16
+            summary.add_table_updated(table_name, item_id)
 
-    @patch("dolly.summary.requests.post")
-    def test_post_to_slack_failure(self, mock_post):
-        """Test failed posting to Slack."""
-        mock_response = MagicMock()
-        mock_response.status_code = 400
-        mock_response.text = "Bad request"
-        mock_post.return_value = mock_response
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        summary = ProcessSummary()
-        result = summary.post_to_slack("https://hooks.slack.com/test")
-
-        assert result is False
-
-    @patch("dolly.summary.requests.post")
-    def test_post_to_slack_request_exception(self, mock_post):
-        """Test Slack posting with request exception."""
-        mock_post.side_effect = requests.exceptions.RequestException("Network error")
-
-        summary = ProcessSummary()
-        result = summary.post_to_slack("https://hooks.slack.com/test")
-
-        assert result is False
+        assert "✅ *Updated Tables*" in payload_str
+        assert "Updated: *30*" in payload_str
+        for index in range(30):
+            assert f"sgid.test.table{index}" in payload_str
 
     @patch("dolly.summary.get_secrets")
     def test_finish_summary_with_slack(self, mock_get_secrets):
         """Test finish_summary posts to Slack when webhook URL is available."""
         # Start a summary so we have a current one
         start_time = time.time()
-        summary = start_summary(start_time)
+        start_summary(start_time)
 
-        # Mock the post_to_slack method
-        with patch.object(summary, "post_to_slack", return_value=True) as mock_post:
-            # Mock secrets with Slack webhook
+        with patch("dolly.summary.SlackHandler.send_message") as mock_send:
             mock_get_secrets.return_value = {
                 "SLACK_WEBHOOK_URL": "https://hooks.slack.com/test"
             }
 
             finish_summary(start_time + 10)
 
-            mock_post.assert_called_once_with("https://hooks.slack.com/test")
+            mock_send.assert_called_once()
 
     @patch("dolly.summary.get_secrets")
     def test_finish_summary_no_slack_webhook(self, mock_get_secrets):
         """Test finish_summary when no Slack webhook URL is configured."""
         # Start a summary so we have a current one
         start_time = time.time()
-        summary = start_summary(start_time)
+        start_summary(start_time)
 
-        # Mock the post_to_slack method
-        with patch.object(summary, "post_to_slack") as mock_post:
-            # Mock secrets without Slack webhook
+        with patch("dolly.summary.SlackHandler.send_message") as mock_send:
             mock_get_secrets.return_value = {}
 
             finish_summary(start_time + 10)
 
-            mock_post.assert_not_called()
+            mock_send.assert_not_called()
 
-    def test_format_slack_message_with_agol_links(self):
-        """Test formatting Slack message with AGOL item links."""
+    def test_build_slack_messages_with_agol_links(self):
+        """Test building Slack message with AGOL item links."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
@@ -547,40 +481,39 @@ class TestSlackIntegration:
             "sgid.test.table3", "abcd1234567890123456789012345678"
         )
 
-        message = summary.format_slack_message()
-
-        message_str = str(message)
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
         # Check that links are created for tables with item_ids
         assert (
             "https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829"
-            in message_str
+            in payload_str
         )
         assert (
             "https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678"
-            in message_str
+            in payload_str
         )
 
         # Check that the link format is correct
         assert (
             "<https://utah.maps.arcgis.com/home/item.html?id=583c0f4888d44f0a90791282b2a69829|`sgid.test.table1`>"
-            in message_str
+            in payload_str
         )
         assert (
             "<https://utah.maps.arcgis.com/home/item.html?id=abcd1234567890123456789012345678|`sgid.test.table3`>"
-            in message_str
+            in payload_str
         )
 
         # Check that tables without item_ids still appear as plain text
-        assert "`sgid.test.table2`" in message_str
+        assert "`sgid.test.table2`" in payload_str
 
         # Ensure the message structure is still correct
-        assert "🟢 *Status:* Process completed successfully" in message_str
-        assert "✅ *Updated Tables*" in message_str
-        assert "🚀 *Published Tables*" in message_str
+        assert "🟢 *Status:* Process completed successfully" in payload_str
+        assert "✅ *Updated Tables*" in payload_str
+        assert "🚀 *Published Tables*" in payload_str
 
-    def test_format_slack_message_with_long_table_list(self):
-        """Test formatting a message with many tables that exceed Slack block limits."""
+    def test_build_slack_messages_with_long_table_list(self):
+        """Test building a message with many tables that exceed Slack block limits."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
@@ -590,28 +523,32 @@ class TestSlackIntegration:
             long_table_name = f"sgid.very_long_schema_name.very_long_table_name_that_makes_text_exceed_limits_{i:03d}"
             summary.add_table_updated(long_table_name, None)
 
-        message = summary.format_slack_message()
-        message_str = str(message)
+        message = summary.build_slack_messages()[0]
+        payload = json.loads(message.json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
 
-        # Should contain continuation markers
-        assert "*(continued)*" in message_str
-        assert len(message["blocks"]) > 1
+        # Should have many blocks with all tables included
+        assert len(payload["blocks"]) > 100
+        # Verify all tables are present in the message
+        for i in range(100):
+            long_table_name = f"sgid.very_long_schema_name.very_long_table_name_that_makes_text_exceed_limits_{i:03d}"
+            assert long_table_name in payload_str
 
-    def test_format_slack_message_with_gcp_environment(self):
-        """Test formatting a message when running in GCP environment."""
+    def test_build_slack_messages_with_gcp_environment(self):
+        """Test building a message when running in GCP environment."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
         summary.add_table_updated("sgid.test.table1", None)
 
         # Mock the GCP metadata request to simulate running in GCP
-        with patch("requests.get") as mock_get:
+        with patch("dolly.summary.requests.get") as mock_get:
             mock_response = MagicMock()
             mock_response.text = "test-project"
             mock_get.return_value = mock_response
 
-            message = summary.format_slack_message()
-            message_str = str(message)
+            message = summary.build_slack_messages()[0]
+            message_str = message.json()
 
             # Should contain GCP logs link
             assert "GCP Logs" in message_str
@@ -622,173 +559,20 @@ class TestSlackIntegration:
             urls = re.findall(r"https?://[^\s\]>]+", message_str)
             assert any(urlparse(u).hostname == "console.cloud.google.com" for u in urls)
 
-    def test_post_to_slack_multiple_blocks(self):
-        """Test posting to Slack when message exceeds block limit."""
+    def test_build_slack_messages_with_publish_errors(self):
+        """Test build_slack_messages includes publish errors section."""
         summary = ProcessSummary()
         summary.start_time = 100.0
         summary.end_time = 110.0
 
-        # Create enough content to exceed 50 blocks
-        # Each block can hold ~2800 chars, and we need to force 51+ blocks
-        base_content = "x" * 100  # Base content to make items longer
-
-        # Add many tables with long names and many errors to generate enough blocks
-        for i in range(300):
-            long_table_name = f"sgid.very_long_schema_name_with_many_characters.very_long_table_name_that_exceeds_normal_limits_{base_content}_{i:04d}"
-            summary.add_table_updated(long_table_name, None)
-            # Add errors for every 5th table to create even more blocks
-            if i % 5 == 0:
-                long_error = f"Very long error message with lots of details {base_content} that will help create more blocks and exceed limits {i}"
-                summary.add_table_error(long_table_name, "update", long_error)
-
-        # Check if we have enough blocks first
-        message = summary.format_slack_message()
-
-        # If we still don't have >50 blocks, skip this test
-        if len(message["blocks"]) <= 50:
-            # Let's just test the multiple request logic by mocking format_slack_message
-            with patch.object(summary, "format_slack_message") as mock_format:
-                # Create a mock message with 51 blocks
-                mock_blocks = [
-                    {
-                        "type": "section",
-                        "text": {"type": "mrkdwn", "text": f"Block {i}"},
-                    }
-                    for i in range(51)
-                ]
-                mock_format.return_value = {"blocks": mock_blocks}
-
-                webhook_url = "https://hooks.slack.com/test"
-
-                with patch("requests.post") as mock_post:
-                    mock_post.return_value.status_code = 200
-                    mock_post.return_value.text = "ok"
-
-                    result = summary.post_to_slack(webhook_url)
-
-                    # Should have made multiple POST requests (51 blocks = 2 requests)
-                    assert mock_post.call_count > 1
-                    assert result is True
-        else:
-            # We have enough blocks naturally
-            webhook_url = "https://hooks.slack.com/test"
-
-            with patch("requests.post") as mock_post:
-                mock_post.return_value.status_code = 200
-                mock_post.return_value.text = "ok"
-
-                result = summary.post_to_slack(webhook_url)
-
-                # Should have made multiple POST requests
-                assert mock_post.call_count > 1
-                assert result is True
-
-    def test_post_to_slack_partial_failure(self):
-        """Test posting to Slack when some message parts fail."""
-        summary = ProcessSummary()
-        summary.start_time = 100.0
-        summary.end_time = 110.0
-
-        # Use the same approach as the previous test - mock format_slack_message to ensure >50 blocks
-        with patch.object(summary, "format_slack_message") as mock_format:
-            # Create a mock message with 51 blocks to force splitting
-            mock_blocks = [
-                {"type": "section", "text": {"type": "mrkdwn", "text": f"Block {i}"}}
-                for i in range(51)
-            ]
-            mock_format.return_value = {"blocks": mock_blocks}
-
-            webhook_url = "https://hooks.slack.com/test"
-
-            call_counter = {"n": 0}
-
-            def side_effect(*args, **kwargs):
-                # Simulate first request succeeding, second failing
-                mock_response = MagicMock()
-                call_counter["n"] += 1
-
-                if call_counter["n"] == 1:
-                    mock_response.status_code = 200
-                    mock_response.text = "ok"
-                else:
-                    mock_response.status_code = 500
-                    mock_response.text = "error"
-                return mock_response
-
-            with patch("requests.post", side_effect=side_effect):
-                result = summary.post_to_slack(webhook_url)
-
-                # Should return False due to partial failure
-                assert result is False
-
-    def test_post_to_slack_exception_handling(self):
-        """Test exception handling in post_to_slack method."""
-        summary = ProcessSummary()
-        summary.start_time = 100.0
-        summary.end_time = 110.0
-        summary.add_table_updated("sgid.test.table1", None)
-
-        webhook_url = "https://hooks.slack.com/test"
-
-        with patch("requests.post", side_effect=Exception("Unexpected error")):
-            result = summary.post_to_slack(webhook_url)
-
-            # Should return False and handle exception gracefully
-            assert result is False
-
-    def test_add_table_publish_error(self):
-        """Test adding publish error (covering publish error branch)."""
-        summary = ProcessSummary()
-
-        summary.add_table_error("sgid.test.table1", "publish", "Publish failed")
-
-        assert "sgid.test.table1" in summary.tables_with_errors
-        assert "sgid.test.table1: Publish failed" in summary.publish_errors
-
-    def test_create_text_blocks_empty_items(self):
-        """Test _create_text_blocks_with_limit with empty items list."""
-        summary = ProcessSummary()
-
-        # Test with empty items list
-        blocks = summary._create_text_blocks_with_limit("Test Title", [], [], "•")
-
-        assert blocks == []
-
-    def test_format_slack_message_title_without_asterisk(self):
-        """Test title continuation when title doesn't end with asterisk."""
-        summary = ProcessSummary()
-        summary.start_time = 100.0
-        summary.end_time = 110.0
-
-        # Create content that will definitely exceed block limits by using very long table names
-        base_content = "x" * 1000  # Very long content
-        for i in range(50):
-            very_long_name = f"sgid.schema.{base_content}_table_{i}"
-            summary.add_table_updated(very_long_name, None)
-
-        message = summary.format_slack_message()
-
-        # The test passes if the message is formatted successfully
-        # (The continuation logic is complex and depends on exact character counts)
-        assert "blocks" in message
-
-    def test_format_slack_message_with_publish_errors(self):
-        """Test format_slack_message includes publish errors section."""
-        summary = ProcessSummary()
-        summary.start_time = 100.0
-        summary.end_time = 110.0
-
-        # Add some publish errors to trigger the publish errors block
         summary.add_table_error("sgid.test.table1", "publish", "Authentication failed")
         summary.add_table_error("sgid.test.table2", "publish", "Invalid geometry")
 
-        message = summary.format_slack_message()
-
-        # Check that publish errors are included in the message
-        message_text = str(message)
-        assert "📤 Publish Error Details" in message_text
-        assert "Authentication failed" in message_text
-        assert "Invalid geometry" in message_text
+        payload = json.loads(summary.build_slack_messages()[0].json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
+        assert "📤 Publish Error Details" in payload_str
+        assert "Authentication failed" in payload_str
+        assert "Invalid geometry" in payload_str
 
     @patch("dolly.summary.logger")
     def test_finish_summary_logs_no_slack_webhook(self, mock_logger):
@@ -817,32 +601,3 @@ class TestSlackIntegration:
             assert len(info_calls) > 0, (
                 f"Expected message not found in logger.info calls: {mock_logger.info.call_args_list}"
             )
-
-    def test_create_text_blocks_title_continuation_without_asterisk(self):
-        """Test _create_text_blocks_with_limit when title doesn't end with asterisk."""
-        summary = ProcessSummary()
-
-        # Use a title that doesn't end with "*" to test line 236
-        title = "Test Title Without Asterisk"
-
-        # Create many long items to force block splitting
-        long_items = [
-            f"sgid.very_long_schema_name.very_long_table_name_with_lots_of_chars_{i:03d}"
-            for i in range(100)
-        ]
-
-        # Call the method directly to test the specific branch
-        blocks = summary._create_text_blocks_with_limit(title, long_items)
-
-        # Should have multiple blocks with continuation titles
-        assert len(blocks) > 1
-
-        # Check that continuation was added properly to title without asterisk
-        found_continuation = False
-        for block in blocks[1:]:  # Skip first block, check continuation blocks
-            text = block["text"]["text"]
-            if "*(continued)*" in text:
-                found_continuation = True
-                break
-
-        assert found_continuation

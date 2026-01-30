@@ -52,25 +52,28 @@ class TestFeatureCountIntegration:
 
     def test_summary_status_with_count_mismatches(self):
         """Test that feature count mismatches affect overall process status."""
+        import json
         summary = ProcessSummary()
 
         # Add a successful table update
         summary.add_table_updated("sgid.test.table1", None)
 
         # No errors initially - should be success
-        message = summary.format_slack_message()
-        message_str = str(message)
-        assert "🟢" in message_str
-        assert "completed successfully" in message_str
+        message = summary.build_slack_messages()[0]
+        payload = json.loads(message.json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
+        assert "🟢" in payload_str
+        assert "completed successfully" in payload_str
 
         # Add a feature count mismatch
         summary.add_feature_count_mismatch("sgid.test.table1", 1000, 999)
 
         # Now should show error status
-        message = summary.format_slack_message()
-        message_str = str(message)
-        assert "🟡" in message_str
-        assert "completed with errors" in message_str
+        message = summary.build_slack_messages()[0]
+        payload = json.loads(message.json())
+        payload_str = json.dumps(payload, ensure_ascii=False)
+        assert "🟡" in payload_str
+        assert "completed with errors" in payload_str
 
     def test_logging_output_format(self):
         """Test that feature count logging uses the expected format."""

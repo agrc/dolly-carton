@@ -86,6 +86,10 @@ pytest
 ruff format . --write
 ```
 
+### Slack summary message testing
+
+Use scripts/post_slack_summary_test_messages.py to post a set of Slack messages that exercise the full range of summary content (success, table errors, global errors, and empty runs). The script uses the real Dolly summary builder and your configured SLACK_WEBHOOK_URL from secrets to send the messages, so point it at a test channel.
+
 ## App Environments
 
 `APP_ENVIRONMENT` is an indicator of what environment the code is running in. This is set in the Dockerfile or Github Actions.

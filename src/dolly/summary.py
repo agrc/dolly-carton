@@ -1,17 +1,31 @@
 """Summary reporting functionality for Dolly Carton process tracking."""
 
 import logging
+import random
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
+from importlib.metadata import PackageNotFoundError, version
 from textwrap import dedent
 from typing import List
 
 import humanize
 import requests
+from supervisor.message_handlers import SlackHandler
+from supervisor.models import MessageDetails
+from supervisor.slack import DividerBlock, Message, SectionBlock
 
 from dolly.utils import get_secrets
 
 logger = logging.getLogger(__name__)
+AGOL_URL = "https://utah.maps.arcgis.com/home/item.html?id="
+
+# Rotating Dolly Parton quotes for encouragement
+DOLLY_QUOTES = [
+    "If you want the rainbow, you gotta put up with the rain.",
+    "There's no failure, only quitting.",
+    "Do the best you can, with what you have, where you are.",
+    "Find out who you are and do it on purpose.",
+]
 
 
 @dataclass
@@ -158,121 +172,34 @@ class ProcessSummary:
         else:
             logger.info("🔵 No tables required processing")
 
-        logger.info("=" * 80)
+        quote = random.choice(DOLLY_QUOTES)
+        logger.info(f'\u2728 "{quote}" - Dolly Parton')
 
-    def _create_item_text(
-        self, text: str, item_id: str | None, prefix: str = "•", title: str = ""
-    ) -> str:
-        """
-        Create text for an item, with optional AGOL link.
+    @staticmethod
+    def _get_client_version() -> str:
+        try:
+            return version("dolly-carton")
+        except PackageNotFoundError:
+            return "unknown"
 
-        Args:
-            text: Text content (table name or error message)
-            item_id: Optional AGOL item ID for creating links
-            prefix: Prefix for the item (default: "•")
-            title: Section title for determining if this is an error context
-
-        Returns:
-            Formatted text string for the item
-        """
-        if item_id:
-            # Create Slack link format: <URL|text>
-            agol_url = f"https://utah.maps.arcgis.com/home/item.html?id={item_id}"
-            return f"{prefix} <{agol_url}|`{text}`>\n"
-        else:
-            # For error messages, don't use backticks; for table names, use backticks
-            if ":" in text and ("Error" in title or "error" in text.lower()):
-                return f"{prefix} {text}\n"
-            else:
-                return f"{prefix} `{text}`\n"
-
-    def _create_text_blocks_with_limit(
-        self,
-        title: str,
-        items: List[str],
-        item_ids: List[str | None] = None,
-        prefix: str = "•",
-        max_chars: int = 2800,
-    ) -> List[dict]:
-        """
-        Create multiple blocks if content exceeds character limit.
-
-        Args:
-            title: Section title (e.g., "✅ *Updated Tables*")
-            items: List of items to include (table names or error messages)
-            item_ids: Optional list of corresponding AGOL item IDs (can be None)
-            prefix: Prefix for each item (default: "•")
-            max_chars: Maximum characters per block (leaving buffer for title and formatting)
-
-        Returns:
-            List of block dictionaries
-        """
-        if not items:
-            return []
-
-        # If no item_ids provided, create a list of None values
-        if item_ids is None:
-            item_ids = [None] * len(items)
-
-        blocks = []
-        current_items = []
-        current_length = len(title) + 10  # Buffer for formatting
-
-        for item_text_content, item_id in zip(items, item_ids):
-            item_text = self._create_item_text(
-                item_text_content, item_id, prefix, title
+    @staticmethod
+    def _get_host_info() -> tuple[str, bool]:
+        host = "local dev"
+        is_running_in_gcp = False
+        try:
+            response = requests.get(
+                "http://metadata.google.internal/computeMetadata/v1/project/project-id",
+                headers={"Metadata-Flavor": "Google"},
+                timeout=5,
             )
-            item_length = len(item_text)
+            host = response.text
+            is_running_in_gcp = True
+        except Exception:
+            pass
 
-            # If adding this item would exceed the limit, create a block with current items
-            if current_length + item_length > max_chars and current_items:
-                item_list = "".join(current_items).rstrip()
-                blocks.append(
-                    {
-                        "type": "section",
-                        "text": {
-                            "type": "mrkdwn",
-                            "text": f"{title}\n{item_list}",
-                        },
-                    }
-                )
-                current_items = []
-                current_length = len(title) + 10
-                # Update title for continuation blocks
-                if "*(continued)*" not in title:
-                    # Find the last asterisk and insert (continued) before it
-                    if title.endswith("*"):
-                        title = title[:-1] + "*(continued)*"
-                    else:
-                        title = title + "*(continued)*"
+        return host, is_running_in_gcp
 
-            current_items.append(item_text)
-            current_length += item_length
-
-        # Add the remaining items
-        if current_items:
-            item_list = "".join(current_items).rstrip()
-            blocks.append(
-                {
-                    "type": "section",
-                    "text": {
-                        "type": "mrkdwn",
-                        "text": f"{title}\n{item_list}",
-                    },
-                }
-            )
-
-        return blocks
-
-    def format_slack_message(self) -> dict:
-        """
-        Format the summary as a Slack message payload using webhook-compatible Block Kit layout.
-        Handles Slack's 3000 character limit per block by splitting long content.
-
-        Returns:
-            dict: Slack message payload with blocks that work with webhooks
-        """
-        # Determine overall status and emoji
+    def build_slack_messages(self) -> List[Message]:
         total_tables = len(set(self.tables_updated + self.tables_published))
         if self.global_errors:
             status_emoji = "🔴"
@@ -288,251 +215,101 @@ class ProcessSummary:
             status_text = "completed - no tables required processing"
 
         elapsed_time = self.get_total_elapsed_time()
-
         current_date = datetime.now().strftime("%B %d, %Y")
-        host = "local dev"
-        is_running_in_gcp = False
-        try:
-            response = requests.get(
-                "http://metadata.google.internal/computeMetadata/v1/project/project-id",
-                headers={"Metadata-Flavor": "Google"},
-                timeout=5,
+        host, is_running_in_gcp = self._get_host_info()
+
+        message = Message(text="Dolly Carton Process Summary")
+        message.add(SectionBlock(text="*🛒 Dolly Carton Process Summary*"))
+        message.add(
+            SectionBlock(text=f"{status_emoji} *Status:* Process {status_text}")
+        )
+        message.add(
+            SectionBlock(
+                fields=[
+                    f"📅 *Date:*\n{current_date}",
+                    f"🖥️ *Host:*\n`{host}`",
+                    f"⏱️ *Duration:*\n{humanize.precisedelta(elapsed_time)}",
+                ]
             )
-            host = response.text
-            is_running_in_gcp = True
-        except Exception:
-            pass
-
-        blocks = []
-
-        # Header section
-        blocks.append(
-            {
-                "type": "header",
-                "text": {
-                    "type": "plain_text",
-                    "text": "🛒 Dolly Carton Process Summary",
-                    "emoji": True,
-                },
-            }
+        )
+        message.add(
+            SectionBlock(
+                text=dedent(
+                    f"""
+                    *📊 Processing Summary*
+                    • Tables processed: *{total_tables}*
+                    • Updated: *{len(self.tables_updated)}*
+                    • Published: *{len(self.tables_published)}*
+                    • Table errors: *{len(self.tables_with_errors)}*
+                    • Global errors: *{len(self.global_errors)}*
+                    """
+                ).strip()
+            )
         )
 
-        # Status section
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": f"{status_emoji} *Status:* Process {status_text}",
-                },
-            }
-        )
-
-        # Context info section
-        blocks.append(
-            {
-                "type": "section",
-                "fields": [
-                    {"type": "mrkdwn", "text": f"📅 *Date:*\n{current_date}"},
-                    {"type": "mrkdwn", "text": f"🖥️ *Host:*\n`{host}`"},
-                    {
-                        "type": "mrkdwn",
-                        "text": f"⏱️ *Duration:*\n{humanize.precisedelta(elapsed_time)}",
-                    },
-                ],
-            }
-        )
-
-        # Key metrics section
-        blocks.append(
-            {
-                "type": "section",
-                "text": {
-                    "type": "mrkdwn",
-                    "text": (
-                        dedent(f"""
-                            *📊 Processing Summary*
-                            • Tables processed: *{total_tables}*
-                            • Updated: *{len(self.tables_updated)}*
-                            • Published: *{len(self.tables_published)}*
-                            • Table errors: *{len(self.tables_with_errors)}*
-                            • Global errors: *{len(self.global_errors)}*
-                        """)
-                    ),
-                },
-            }
-        )
-        # Add divider before detailed sections
         if (
             self.tables_updated
             or self.tables_published
             or self.tables_with_errors
             or self.global_errors
         ):
-            blocks.append({"type": "divider"})
+            message.add(DividerBlock())
 
-        # Updated tables section
         if self.tables_updated:
-            updated_blocks = self._create_text_blocks_with_limit(
-                "✅ *Updated Tables*", self.tables_updated, self.updated_item_ids
-            )
-            blocks.extend(updated_blocks)
+            message.add(SectionBlock(text="✅ *Updated Tables*"))
+            for table, item_id in zip(self.tables_updated, self.updated_item_ids):
+                message.add(SectionBlock(text=f"• <{AGOL_URL}{item_id}|`{table}`>"))
 
-        # Published tables section
         if self.tables_published:
-            published_blocks = self._create_text_blocks_with_limit(
-                "🚀 *Published Tables*", self.tables_published, self.published_item_ids
-            )
-            blocks.extend(published_blocks)
+            message.add(SectionBlock(text="🚀 *Published Tables*"))
+            for table, item_id in zip(self.tables_published, self.published_item_ids):
+                message.add(SectionBlock(text=f"• <{AGOL_URL}{item_id}|`{table}`>"))
 
-        # Error sections
         if self.tables_with_errors:
-            error_blocks = self._create_text_blocks_with_limit(
-                "❌ *Tables with Errors*", self.tables_with_errors
-            )
-            blocks.extend(error_blocks)
+            message.add(SectionBlock(text="🚨 *Tables with Errors*"))
+            for table in self.tables_with_errors:
+                message.add(SectionBlock(text=f"• `{table}`"))
 
-            # Update errors with detailed formatting
-            if self.update_errors:
-                update_error_blocks = self._create_text_blocks_with_limit(
-                    "*🔧 Update Error Details:*", self.update_errors, prefix="•"
-                )
-                blocks.extend(update_error_blocks)
+        if self.update_errors:
+            message.add(SectionBlock("*🔧 Update Error Details:*"))
+            for error in self.update_errors:
+                message.add(SectionBlock(text=f"• {error}"))
 
-            # Publish errors with detailed formatting
-            if self.publish_errors:
-                publish_error_blocks = self._create_text_blocks_with_limit(
-                    "*📤 Publish Error Details:*", self.publish_errors, prefix="•"
-                )
-                blocks.extend(publish_error_blocks)
+        if self.publish_errors:
+            message.add(SectionBlock("*📤 Publish Error Details:*"))
+            for error in self.publish_errors:
+                message.add(SectionBlock(text=f"• {error}"))
 
-        # Global errors section
         if self.global_errors:
-            global_error_blocks = self._create_text_blocks_with_limit(
-                "🚨 *Global Errors (Process Failed):*", self.global_errors, prefix="•"
-            )
-            blocks.extend(global_error_blocks)
+            message.add(SectionBlock("🚨 *Global Errors (Process Failed):*"))
+            for error in self.global_errors:
+                message.add(SectionBlock(text=f"• {error}"))
 
         if is_running_in_gcp:
-            # Create GCP logs link with time range based on actual process execution time
-            # Add 1 hour buffer to start and end times
-            buffer_seconds = 900  # 15 minutes
+            buffer_seconds = 900
             log_start_time = self.start_time - buffer_seconds
             log_end_time = (
                 self.end_time if self.end_time > 0 else datetime.now().timestamp()
             ) + buffer_seconds
 
-            # Convert to ISO format for GCP logs URL
             log_start_datetime = (
                 datetime.fromtimestamp(log_start_time).isoformat() + "Z"
             )
             log_end_datetime = datetime.fromtimestamp(log_end_time).isoformat() + "Z"
 
-            blocks.append(
-                {
-                    "type": "rich_text",
-                    "elements": [
-                        {
-                            "type": "rich_text_section",
-                            "elements": [
-                                {
-                                    "type": "link",
-                                    "text": "GCP Logs",
-                                    "url": f"https://console.cloud.google.com/logs/query;query=resource.type%20%3D%20%22cloud_run_job%22%20resource.labels.job_name%20%3D%20%22dolly%22%20resource.labels.location%20%3D%20%22us-west3%22%20severity%3E%3DDEFAULT;storageScope=project;timeRange={log_start_datetime}%2F{log_end_datetime}?authuser=0&inv=1&invt=Ab43MA&project={host}",
-                                }
-                            ],
-                        }
-                    ],
-                }
+            gcp_logs_url = (
+                "https://console.cloud.google.com/logs/query;"
+                "query=resource.type%20%3D%20%22cloud_run_job%22%20resource.labels.job_name%20%3D%20%22dolly%22%20resource.labels.location%20%3D%20%22us-west3%22%20severity%3E%3DDEFAULT;"
+                f"storageScope=project;timeRange={log_start_datetime}%2F{log_end_datetime}?authuser=0&inv=1&invt=Ab43MA&project={host}"
             )
+            message.add(SectionBlock(text=f"🔗 <{gcp_logs_url}|GCP Logs>"))
 
-        return {"blocks": blocks}
+        message.add(DividerBlock())
+        message.add(SectionBlock(f'"{random.choice(DOLLY_QUOTES)}" - Dolly Parton'))
+        message.add(DividerBlock())
+        message.add(SectionBlock(text=" "))
 
-    def post_to_slack(self, webhook_url: str) -> bool:
-        """
-        Post the summary to a Slack channel via webhook.
-
-        Handles Slack's 50-block limit by splitting large messages into multiple parts.
-
-        Args:
-            webhook_url: Slack webhook URL for posting messages
-
-        Returns:
-            bool: True if all messages posted successfully, False otherwise
-        """
-        try:
-            payload = self.format_slack_message()
-            blocks = payload["blocks"]
-
-            # Slack limit is 50 blocks per message
-            MAX_BLOCKS_PER_MESSAGE = 50
-
-            if len(blocks) <= MAX_BLOCKS_PER_MESSAGE:
-                # Single message - send as is
-                response = requests.post(
-                    webhook_url,
-                    json=payload,
-                    headers={"Content-Type": "application/json"},
-                    timeout=30,
-                )
-
-                if response.status_code == 200:
-                    logger.info("Successfully posted summary to Slack")
-                    return True
-                else:
-                    logger.warning(
-                        f"Failed to post to Slack. Status code: {response.status_code}, "
-                        f"Response: {response.text}"
-                    )
-                    return False
-            else:
-                # Multiple messages needed
-                logger.info(
-                    f"Message has {len(blocks)} blocks, splitting into multiple messages"
-                )
-
-                # Split blocks into chunks
-                message_chunks = []
-                for i in range(0, len(blocks), MAX_BLOCKS_PER_MESSAGE):
-                    chunk_blocks = blocks[i : i + MAX_BLOCKS_PER_MESSAGE]
-                    message_chunks.append({"blocks": chunk_blocks})
-
-                # Send all chunks
-                all_successful = True
-                for part_num, chunk in enumerate(message_chunks, 1):
-                    response = requests.post(
-                        webhook_url,
-                        json=chunk,
-                        headers={"Content-Type": "application/json"},
-                        timeout=30,
-                    )
-
-                    if response.status_code == 200:
-                        logger.info(
-                            f"Successfully posted part {part_num} of {len(message_chunks)} to Slack"
-                        )
-                    else:
-                        logger.warning(
-                            f"Failed to post part {part_num} to Slack. "
-                            f"Status code: {response.status_code}, Response: {response.text}"
-                        )
-                        all_successful = False
-
-                if all_successful:
-                    logger.info(
-                        f"Successfully posted all {len(message_chunks)} message parts to Slack"
-                    )
-
-                return all_successful
-
-        except requests.exceptions.RequestException as e:
-            logger.error(f"Error posting to Slack: {e}", exc_info=True)
-
-            return False
-        except Exception as e:
-            logger.error(f"Unexpected error posting to Slack: {e}", exc_info=True)
-
-            return False
+        return [message]
 
 
 # Global instance to track the current process
@@ -579,7 +356,14 @@ def finish_summary(end_time: float) -> None:
             slack_webhook_url = secrets["SLACK_WEBHOOK_URL"]
 
             if slack_webhook_url:
-                _current_summary.post_to_slack(slack_webhook_url)
+                handler = SlackHandler(
+                    {"webhook_url": slack_webhook_url},
+                    client_name="dolly-carton",
+                    client_version=_current_summary._get_client_version(),
+                )
+                message_details = MessageDetails()
+                message_details.slack_messages = _current_summary.build_slack_messages()
+                handler.send_message(message_details)
             else:
                 logger.info(
                     "No Slack webhook URL configured, skipping Slack notification"
