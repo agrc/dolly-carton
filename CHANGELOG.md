@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.0.8](https://github.com/agrc/dolly-carton/compare/v1.0.7...v1.0.8) (2026-02-13)
+
+
+### Dependencies
+
+* **dev:** update pytest requirement from ==8.* to &gt;=8,&lt;10 ([#48](https://github.com/agrc/dolly-carton/issues/48)) ([4d6e05b](https://github.com/agrc/dolly-carton/commit/4d6e05b0bcc841f85f8fccfc2455f2ccc0cd0e7f))
+* **docker:** bump osgeo/gdal from ubuntu-full-3.11.4 to ubuntu-full-3.12.1 in the docker-dependencies group ([#46](https://github.com/agrc/dolly-carton/issues/46)) ([aca39d4](https://github.com/agrc/dolly-carton/commit/aca39d45d50946c54f95e86ae9802dabdf5544fc))
+
 ## [1.0.7](https://github.com/agrc/dolly-carton/compare/v1.0.6...v1.0.7) (2025-11-11)
 
 
