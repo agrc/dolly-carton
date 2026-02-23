@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.0.9](https://github.com/agrc/dolly-carton/compare/v1.0.8...v1.0.9) (2026-02-23)
+
+
+### Features
+
+* upgrade to use supervisor for slack messaging ([82ea3c0](https://github.com/agrc/dolly-carton/commit/82ea3c032bf1bd4b3b6537a134227e088bc38cb7))
+
 ## [1.0.8](https://github.com/agrc/dolly-carton/compare/v1.0.7...v1.0.8) (2026-02-13)
 
 
