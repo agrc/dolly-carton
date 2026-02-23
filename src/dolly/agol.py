@@ -4,6 +4,7 @@ from pathlib import Path
 from shutil import make_archive
 from typing import cast
 
+import requests
 from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
 from arcgis.gis import GIS, Item
 
@@ -231,29 +232,36 @@ def zip_and_upload_fgdb(fgdb_path: Path, gis_connection: GIS) -> Item:
 
 def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
     """
-    Count features in an ArcGIS Online service using the ArcGIS API.
+    Count features in an ArcGIS Online service by querying the REST endpoint directly.
+
+    Queries the feature service REST endpoint directly using requests to avoid
+    potential caching issues with the ArcGIS Python API.
 
     Args:
-    service_item: ArcGIS service item (Table or FeatureLayer)
-    gis_connection: GIS connection to use for fresh item references
+        service_item: ArcGIS service item (Table or FeatureLayer)
 
     Returns:
-        Number of features in the service
+        Number of features in the service, or -1 on failure
     """
     try:
-        #: get new gis connection and item reference to avoid stale data from AGOL cache
-        if service_item.properties["type"] == "Table":
-            new_item = Table.fromitem(
-                Item(get_gis_connection(), service_item.properties["serviceItemId"])
+        url = f"{service_item.url}/query"
+        #: _con.token is the standard way to get the auth token from the arcgis GIS connection
+        token = get_gis_connection()._con.token
+        params = {
+            "where": "1=1",
+            "returnCountOnly": "true",
+            "f": "json",
+            "token": token,
+        }
+        response = requests.get(url, params=params)
+        response.raise_for_status()
+        data = response.json()
+        if "error" in data:
+            error = data["error"]
+            raise RuntimeError(
+                f"Service returned error {error.get('code')}: {error.get('message')}"
             )
-        else:
-            new_item = FeatureLayer.fromitem(
-                Item(get_gis_connection(), service_item.properties["serviceItemId"])
-            )
-
-        result = retry(new_item.query, return_count_only=True)
-
-        return result
+        return data["count"]
     except Exception as e:
         logger.error(f"Failed to count features in AGOL service: {e}", exc_info=True)
         return -1

@@ -343,8 +343,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -359,8 +359,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -419,15 +419,11 @@ class TestGetSecrets:
         # Mock the Path(__file__).parent / "secrets" chain
         mock_file_path = mock_path_class.return_value
         mock_file_path.parent = mock_path_class.return_value
-        mock_file_path.parent.__truediv__ = (
-            lambda self, other: mock_local_folder
-            if other == "secrets"
-            else mock_path_class.return_value
+        mock_file_path.parent.__truediv__ = lambda self, other: (
+            mock_local_folder if other == "secrets" else mock_path_class.return_value
         )
-        mock_local_folder.__truediv__ = (
-            lambda self, other: mock_local_file
-            if other == "secrets.json"
-            else mock_path_class.return_value
+        mock_local_folder.__truediv__ = lambda self, other: (
+            mock_local_file if other == "secrets.json" else mock_path_class.return_value
         )
 
         def path_constructor(path_str):
@@ -474,13 +470,13 @@ class TestGetSecrets:
             # Mock the Path(__file__).parent / "secrets" chain
             mock_file_path = mock_path_class.return_value
             mock_file_path.parent = mock_path_class.return_value
-            mock_file_path.parent.__truediv__ = (
-                lambda self, other: mock_local_folder
+            mock_file_path.parent.__truediv__ = lambda self, other: (
+                mock_local_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
-            mock_local_folder.__truediv__ = (
-                lambda self, other: mock_local_file
+            mock_local_folder.__truediv__ = lambda self, other: (
+                mock_local_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -558,8 +554,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -569,8 +565,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -632,8 +628,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -643,8 +639,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )

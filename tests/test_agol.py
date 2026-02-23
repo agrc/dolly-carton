@@ -1243,74 +1243,78 @@ class TestCountFeaturesInAgolService:
     """Tests for the _count_features_in_agol_service helper."""
 
     @patch("dolly.agol.get_gis_connection")
-    @patch("dolly.agol.retry")
-    @patch("dolly.agol.Table")
-    @patch("dolly.agol.Item")
-    def test_counts_table_features_success(
-        self, mock_item_cls, mock_table_cls, mock_retry, mock_get_conn
-    ):
+    @patch("dolly.agol.requests.get")
+    def test_counts_features_success(self, mock_requests_get, mock_get_conn):
         # Arrange
-        mock_item_instance = Mock()
-        mock_item_cls.return_value = mock_item_instance
+        mock_conn = Mock()
+        mock_conn._con.token = "test-token"
+        mock_get_conn.return_value = mock_conn
 
-        mock_layer = Mock()
-        mock_table_cls.fromitem.return_value = mock_layer
-
-        mock_retry.return_value = 123
+        mock_response = Mock()
+        mock_response.json.return_value = {"count": 123}
+        mock_requests_get.return_value = mock_response
 
         service_item = Mock()
-        service_item.properties = {"type": "Table", "serviceItemId": "abc123"}
+        service_item.url = (
+            "https://services.arcgis.com/org/arcgis/rest/services/Svc/FeatureServer/0"
+        )
 
         # Act
         result = _count_features_in_agol_service(service_item)
 
         # Assert
         assert result == 123
-        mock_table_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        mock_requests_get.assert_called_once_with(
+            f"{service_item.url}/query",
+            params={
+                "where": "1=1",
+                "returnCountOnly": "true",
+                "f": "json",
+                "token": "test-token",
+            },
+        )
+        mock_response.raise_for_status.assert_called_once()
 
     @patch("dolly.agol.get_gis_connection")
-    @patch("dolly.agol.retry")
-    @patch("dolly.agol.FeatureLayer")
-    @patch("dolly.agol.Item")
-    def test_counts_feature_layer_success(
-        self, mock_item_cls, mock_fl_cls, mock_retry, mock_get_gis_connection
+    @patch("dolly.agol.requests.get")
+    def test_service_error_response_returns_negative_one(
+        self, mock_requests_get, mock_get_conn
     ):
         # Arrange
-        mock_item_instance = Mock()
-        mock_item_cls.return_value = mock_item_instance
+        mock_conn = Mock()
+        mock_conn._con.token = "test-token"
+        mock_get_conn.return_value = mock_conn
 
-        mock_layer = Mock()
-        mock_fl_cls.fromitem.return_value = mock_layer
-
-        mock_retry.return_value = 456
+        mock_response = Mock()
+        mock_response.json.return_value = {
+            "error": {"code": 400, "message": "Bad request"}
+        }
+        mock_requests_get.return_value = mock_response
 
         service_item = Mock()
-        service_item.properties = {
-            "type": "Feature Layer",
-            "serviceItemId": "svc-789",
-        }
+        service_item.url = (
+            "https://services.arcgis.com/org/arcgis/rest/services/Svc/FeatureServer/0"
+        )
 
         # Act
         result = _count_features_in_agol_service(service_item)
 
         # Assert
-        assert result == 456
-        mock_fl_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        assert result == -1
 
     @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.logger")
-    @patch("dolly.agol.Table")
-    @patch("dolly.agol.Item")
+    @patch("dolly.agol.requests.get")
     def test_error_path_returns_negative_one(
-        self, mock_item_cls, mock_table_cls, mock_logger, mock_get_gis_connection
+        self, mock_requests_get, mock_logger, mock_get_gis_connection
     ):
-        # Arrange: make fromitem raise
-        mock_table_cls.fromitem.side_effect = Exception("boom")
+        # Arrange: make requests.get raise
+        mock_requests_get.side_effect = Exception("boom")
 
         service_item = Mock()
-        service_item.properties = {"type": "Table", "serviceItemId": "oops"}
+        service_item.url = (
+            "https://services.arcgis.com/org/arcgis/rest/services/Svc/FeatureServer/0"
+        )
 
         # Act
         result = _count_features_in_agol_service(service_item)
