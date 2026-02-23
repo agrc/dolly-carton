@@ -26,6 +26,7 @@ DOLLY_QUOTES = [
     "Do the best you can, with what you have, where you are.",
     "Find out who you are and do it on purpose.",
 ]
+RANDOM_QUOTE = random.choice(DOLLY_QUOTES)
 
 
 @dataclass
@@ -172,8 +173,7 @@ class ProcessSummary:
         else:
             logger.info("🔵 No tables required processing")
 
-        quote = random.choice(DOLLY_QUOTES)
-        logger.info(f'\u2728 "{quote}" - Dolly Parton')
+        logger.info(f'\u2728 "{RANDOM_QUOTE}" - Dolly Parton')
 
     @staticmethod
     def _get_client_version() -> str:
@@ -198,6 +198,16 @@ class ProcessSummary:
             pass
 
         return host, is_running_in_gcp
+
+    @staticmethod
+    def _add_table_blocks(
+        message: Message, tables: List[str], item_ids: List[str | None]
+    ) -> None:
+        for table, item_id in zip(tables, item_ids):
+            if item_id:
+                message.add(SectionBlock(text=f"• <{AGOL_URL}{item_id}|`{table}`>"))
+            else:
+                message.add(SectionBlock(text=f"• `{table}`"))
 
     def build_slack_messages(self) -> List[Message]:
         total_tables = len(set(self.tables_updated + self.tables_published))
@@ -257,13 +267,19 @@ class ProcessSummary:
 
         if self.tables_updated:
             message.add(SectionBlock(text="✅ *Updated Tables*"))
-            for table, item_id in zip(self.tables_updated, self.updated_item_ids):
-                message.add(SectionBlock(text=f"• <{AGOL_URL}{item_id}|`{table}`>"))
+            self._add_table_blocks(
+                message,
+                self.tables_updated,
+                self.updated_item_ids,
+            )
 
         if self.tables_published:
             message.add(SectionBlock(text="🚀 *Published Tables*"))
-            for table, item_id in zip(self.tables_published, self.published_item_ids):
-                message.add(SectionBlock(text=f"• <{AGOL_URL}{item_id}|`{table}`>"))
+            self._add_table_blocks(
+                message,
+                self.tables_published,
+                self.published_item_ids,
+            )
 
         if self.tables_with_errors:
             message.add(SectionBlock(text="🚨 *Tables with Errors*"))
@@ -271,17 +287,17 @@ class ProcessSummary:
                 message.add(SectionBlock(text=f"• `{table}`"))
 
         if self.update_errors:
-            message.add(SectionBlock("*🔧 Update Error Details:*"))
+            message.add(SectionBlock(text="*🔧 Update Error Details:*"))
             for error in self.update_errors:
                 message.add(SectionBlock(text=f"• {error}"))
 
         if self.publish_errors:
-            message.add(SectionBlock("*📤 Publish Error Details:*"))
+            message.add(SectionBlock(text="*📤 Publish Error Details:*"))
             for error in self.publish_errors:
                 message.add(SectionBlock(text=f"• {error}"))
 
         if self.global_errors:
-            message.add(SectionBlock("🚨 *Global Errors (Process Failed):*"))
+            message.add(SectionBlock(text="🚨 *Global Errors (Process Failed):*"))
             for error in self.global_errors:
                 message.add(SectionBlock(text=f"• {error}"))
 
@@ -305,8 +321,9 @@ class ProcessSummary:
             message.add(SectionBlock(text=f"🔗 <{gcp_logs_url}|GCP Logs>"))
 
         message.add(DividerBlock())
-        message.add(SectionBlock(f'"{random.choice(DOLLY_QUOTES)}" - Dolly Parton'))
+        message.add(SectionBlock(text=f'"{RANDOM_QUOTE}" - Dolly Parton'))
         message.add(DividerBlock())
+        #: add a space for better formatting when viewed in Slack
         message.add(SectionBlock(text=" "))
 
         return [message]
