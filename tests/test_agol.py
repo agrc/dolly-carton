@@ -1242,14 +1242,9 @@ class TestPublishNewFeatureServices:
 class TestCountFeaturesInAgolService:
     """Tests for the _count_features_in_agol_service helper."""
 
-    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.requests.get")
-    def test_counts_features_success(self, mock_requests_get, mock_get_conn):
+    def test_counts_features_success(self, mock_requests_get):
         # Arrange
-        mock_conn = Mock()
-        mock_conn._con.token = "test-token"
-        mock_get_conn.return_value = mock_conn
-
         mock_response = Mock()
         mock_response.json.return_value = {"count": 123}
         mock_requests_get.return_value = mock_response
@@ -1266,25 +1261,13 @@ class TestCountFeaturesInAgolService:
         assert result == 123
         mock_requests_get.assert_called_once_with(
             f"{service_item.url}/query",
-            params={
-                "where": "1=1",
-                "returnCountOnly": "true",
-                "f": "json",
-                "token": "test-token",
-            },
+            params={"where": "1=1", "returnCountOnly": "true", "f": "json"},
         )
         mock_response.raise_for_status.assert_called_once()
 
-    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.requests.get")
-    def test_service_error_response_returns_negative_one(
-        self, mock_requests_get, mock_get_conn
-    ):
+    def test_service_error_response_returns_negative_one(self, mock_requests_get):
         # Arrange
-        mock_conn = Mock()
-        mock_conn._con.token = "test-token"
-        mock_get_conn.return_value = mock_conn
-
         mock_response = Mock()
         mock_response.json.return_value = {
             "error": {"code": 400, "message": "Bad request"}
@@ -1302,12 +1285,9 @@ class TestCountFeaturesInAgolService:
         # Assert
         assert result == -1
 
-    @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.logger")
     @patch("dolly.agol.requests.get")
-    def test_error_path_returns_negative_one(
-        self, mock_requests_get, mock_logger, mock_get_gis_connection
-    ):
+    def test_error_path_returns_negative_one(self, mock_requests_get, mock_logger):
         # Arrange: make requests.get raise
         mock_requests_get.side_effect = Exception("boom")
 

@@ -245,13 +245,10 @@ def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
     """
     try:
         url = f"{service_item.url}/query"
-        #: _con.token is the standard way to get the auth token from the arcgis GIS connection
-        token = get_gis_connection()._con.token
         params = {
             "where": "1=1",
             "returnCountOnly": "true",
             "f": "json",
-            "token": token,
         }
         response = requests.get(url, params=params)
         response.raise_for_status()
