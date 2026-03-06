@@ -1,5 +1,5 @@
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 import pytest
 
@@ -1267,7 +1267,9 @@ class TestCountFeaturesInAgolService:
         # Assert
         assert result == 123
         mock_table_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        mock_retry.assert_called_once_with(
+            mock_layer.query, return_count_only=True, where=ANY
+        )
 
     @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.retry")
@@ -1297,7 +1299,9 @@ class TestCountFeaturesInAgolService:
         # Assert
         assert result == 456
         mock_fl_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        mock_retry.assert_called_once_with(
+            mock_layer.query, return_count_only=True, where=ANY
+        )
 
     @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.logger")
