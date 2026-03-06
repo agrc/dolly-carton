@@ -30,6 +30,8 @@ from dolly.utils import OUTPUT_PATH
 
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
+BATCH_SIZE = 20
+
 logger = logging.getLogger(__name__)
 
 
@@ -133,20 +135,29 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
                 f"Updating existing feature services for tables: {updated_tables_with_existing_services}"
             )
 
-            fgdb_path, source_counts = create_fgdb(
-                updated_tables_with_existing_services,
-                agol_items_lookup,
-            )
-            gdb_item = zip_and_upload_fgdb(fgdb_path, gis)
-
-            update_feature_services(
-                gdb_item,
-                updated_tables_with_existing_services,
-                agol_items_lookup,
-                current_hashes,
-                source_counts,
-                gis,
-            )
+            # TODO: replace with itertools.batched(tables, BATCH_SIZE) once upgraded to Python 3.12+
+            batches = [
+                updated_tables_with_existing_services[i : i + BATCH_SIZE]
+                for i in range(
+                    0, len(updated_tables_with_existing_services), BATCH_SIZE
+                )
+            ]
+            for i, batch in enumerate(batches, 1):
+                logger.info(
+                    f"Processing batch {i}/{len(batches)} ({len(batch)} tables)"
+                )
+                fgdb_path, source_counts = create_fgdb(
+                    batch, agol_items_lookup, batch_index=i
+                )
+                gdb_item = zip_and_upload_fgdb(fgdb_path, gis)
+                update_feature_services(
+                    gdb_item,
+                    batch,
+                    agol_items_lookup,
+                    current_hashes,
+                    source_counts,
+                    gis,
+                )
         else:
             logger.info("No existing feature services to update.")
 

@@ -93,7 +93,7 @@ def _get_internal_connection() -> Path:
 
 
 def _generate_output_path(
-    tables: list[str], agol_items_lookup: dict[str, dict]
+    tables: list[str], agol_items_lookup: dict[str, dict], batch_index: int | None = None
 ) -> Path:
     """
     Generate the output FGDB path based on the tables and lookup data.
@@ -101,6 +101,8 @@ def _generate_output_path(
     Args:
         tables: List of table names
         agol_items_lookup: Lookup dictionary for AGOL items
+        batch_index: Optional batch number (1-based) used to produce unique FGDB names
+                     when processing multiple batches of tables.
 
     Returns:
         Path object for the output FGDB
@@ -110,6 +112,9 @@ def _generate_output_path(
         category = tables[0].split(".")[1].lower()
 
         return OUTPUT_PATH / f"{category}_{get_service_from_title(first_title)}.gdb"
+
+    if batch_index is not None:
+        return OUTPUT_PATH / f"upload_{batch_index}.gdb"
 
     return FGDB_PATH
 
@@ -485,6 +490,7 @@ def create_fgdb(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
     gdal_connection: gdal.Dataset | None = None,
+    batch_index: int | None = None,
 ) -> tuple[Path, dict[str, int]]:
     """
     Create a File Geodatabase (FGDB) from the specified tables.
@@ -494,6 +500,8 @@ def create_fgdb(
         agol_items_lookup: Lookup dictionary with AGOL item information
         gdal_connection: GDAL database connection (optional, will create new if not provided).
                         Primarily used for testing to inject mock connections.
+        batch_index: Optional batch number (1-based) forwarded to _generate_output_path to
+                     produce unique FGDB names when processing multiple batches.
 
     Returns:
         Tuple of (Path to the created FGDB, dictionary mapping table names to source feature counts)
@@ -505,7 +513,7 @@ def create_fgdb(
         if len(tables) == 0:
             raise ValueError("No tables provided to create FGDB.")
 
-        output_gdb_path = _generate_output_path(tables, agol_items_lookup)
+        output_gdb_path = _generate_output_path(tables, agol_items_lookup, batch_index)
 
         # Copy tables first to create the FGDB structure
         tables_copied = False
