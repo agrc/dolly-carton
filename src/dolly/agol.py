@@ -1,6 +1,7 @@
 import logging
 import os
 import zipfile
+from datetime import datetime
 from pathlib import Path
 from typing import cast
 
@@ -255,7 +256,12 @@ def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
                 Item(get_gis_connection(), service_item.properties["serviceItemId"])
             )
 
-        result = retry(new_item.query, return_count_only=True)
+        timestamp = datetime.now().timestamp()
+        result = retry(
+            new_item.query,
+            return_count_only=True,
+            where=f"{timestamp}={timestamp}",
+        )
 
         return result
     except Exception as e:
