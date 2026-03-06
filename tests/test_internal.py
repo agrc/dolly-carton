@@ -79,6 +79,19 @@ class TestGenerateOutputPath:
 
         assert result == Path("/test/upload.gdb")
 
+    def test_multiple_tables_with_batch_index_uses_indexed_path(self):
+        """Test that multiple tables with a batch_index produce a unique indexed FGDB name."""
+        tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        agol_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
+            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+        }
+
+        with patch("dolly.internal.OUTPUT_PATH", Path("/test/output")):
+            result = _generate_output_path(tables, agol_lookup, batch_index=3)
+
+        assert result == Path("/test/output/upload_3.gdb")
+
 
 class TestGetGeometryOption:
     """Test cases for the _get_geometry_option function."""

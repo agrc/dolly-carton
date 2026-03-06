@@ -330,6 +330,70 @@ class TestMain:
             "Using CLI-provided tables: ['sgid.society.cemeteries', 'sgid.transportation.roads']"
         )
 
+    @patch("dolly.main.time.time")
+    @patch("dolly.main.humanize.precisedelta")
+    @patch("dolly.main.get_current_hashes")
+    @patch("dolly.main.determine_updated_tables")
+    @patch("dolly.main.get_table_hashes")
+    @patch("dolly.main.update_feature_services")
+    @patch("dolly.main.zip_and_upload_fgdb")
+    @patch("dolly.main.create_fgdb")
+    @patch("dolly.main.get_agol_items_lookup")
+    @patch("dolly.main.get_gis_connection")
+    @patch("dolly.main.clean_up")
+    @patch("dolly.main.logger")
+    def test_main_batches_large_table_list(
+        self,
+        mock_logger,
+        mock_clean_up,
+        mock_get_gis_connection,
+        mock_get_agol_items_lookup,
+        mock_create_fgdb,
+        mock_zip_and_upload_fgdb,
+        mock_update_feature_services,
+        mock_get_table_hashes,
+        mock_determine_updated,
+        mock_get_current_hashes,
+        mock_precisedelta,
+        mock_time,
+    ):
+        """Tables are processed in batches of 20 to keep FGDB size manageable."""
+        # Build 25 tables that all have existing services
+        tables = [f"sgid.category.table{i:02d}" for i in range(25)]
+        agol_items_lookup = {
+            table: {"item_id": f"item-id-{i}", "published_name": f"Utah Table {i:02d}"}
+            for i, table in enumerate(tables)
+        }
+        current_hashes = {table: f"hash{i}" for i, table in enumerate(tables)}
+
+        mock_time.side_effect = [1000.0, 1060.0]
+        mock_get_gis_connection.return_value = Mock()
+        mock_get_table_hashes.return_value = {}
+        mock_get_current_hashes.return_value = current_hashes
+        mock_determine_updated.return_value = tables
+        mock_get_agol_items_lookup.return_value = agol_items_lookup
+        mock_precisedelta.return_value = "60 seconds"
+        fgdb_path_mock = Mock()
+        mock_create_fgdb.return_value = (fgdb_path_mock, {})
+        mock_zip_and_upload_fgdb.return_value = Mock()
+
+        _main_logic()
+
+        # 25 tables → 2 batches (20 + 5)
+        assert mock_create_fgdb.call_count == 2
+        assert mock_update_feature_services.call_count == 2
+
+        first_batch = mock_update_feature_services.call_args_list[0][0][1]
+        second_batch = mock_update_feature_services.call_args_list[1][0][1]
+        assert len(first_batch) == 20
+        assert len(second_batch) == 5
+        assert first_batch == tables[:20]
+        assert second_batch == tables[20:]
+
+        # Each batch passes its 1-based index so create_fgdb can produce unique FGDB names
+        assert mock_create_fgdb.call_args_list[0][1]["batch_index"] == 1
+        assert mock_create_fgdb.call_args_list[1][1]["batch_index"] == 2
+
 
 class TestCleanupDevAgolItems:
     """Test cases for the cleanup_dev_agol_items function."""
