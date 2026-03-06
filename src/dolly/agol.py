@@ -256,11 +256,12 @@ def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
                 Item(get_gis_connection(), service_item.properties["serviceItemId"])
             )
 
-        timestamp = datetime.now().timestamp()
+        # Use an integer millisecond timestamp to avoid decimal literals in the SQL where clause
+        timestamp_ms = int(datetime.now().timestamp() * 1000)
         result = retry(
             new_item.query,
             return_count_only=True,
-            where=f"{timestamp}={timestamp}",
+            where=f"{timestamp_ms}={timestamp_ms}",
         )
 
         return result
