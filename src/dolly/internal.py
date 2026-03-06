@@ -93,7 +93,9 @@ def _get_internal_connection() -> Path:
 
 
 def _generate_output_path(
-    tables: list[str], agol_items_lookup: dict[str, dict], batch_index: int | None = None
+    tables: list[str],
+    agol_items_lookup: dict[str, dict],
+    batch_index: int | None = None,
 ) -> Path:
     """
     Generate the output FGDB path based on the tables and lookup data.
