@@ -54,7 +54,7 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
-        if any(previous_timer):
+        if previous_timer[0] > 0 or previous_timer[1] > 0:
             signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
 
 
