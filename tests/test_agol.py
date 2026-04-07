@@ -4,6 +4,7 @@ from unittest.mock import Mock, patch
 import pytest
 
 from dolly.agol import (
+    AGOL_OPERATION_TIMEOUT,
     _count_features_in_agol_service,
     _create_zip_from_fgdb,
     _delete_agol_item,
@@ -610,6 +611,14 @@ class TestTruncateAndAppend:
         with pytest.raises(RuntimeError, match="Append failed"):
             _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
+    @patch("dolly.agol.retry")
+    def test_uses_agol_operation_timeout(self, mock_retry):
+        mock_retry.return_value = True
+
+        assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
+        mock_retry.assert_called_once()
+        assert mock_retry.call_args.kwargs == {"timeout": AGOL_OPERATION_TIMEOUT}
+
 
 class TestZipAndUploadFgdb:
     """Test cases for the zip_and_upload_fgdb function."""
@@ -985,6 +994,7 @@ class TestCreateAndPublishService:
             mock_single_item.publish,
             publish_parameters={"name": fgdb_path.stem},
             file_type="fileGeodatabase",
+            timeout=AGOL_OPERATION_TIMEOUT,
         )
         mock_single_item.delete.assert_called_once_with(permanent=True)
 
