@@ -40,7 +40,8 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
         raise ValueError("timeout must be greater than 0")
 
     previous_handler = signal.getsignal(signal.SIGALRM)
-    previous_timer = signal.setitimer(signal.ITIMER_REAL, 0)
+    previous_timer = signal.getitimer(signal.ITIMER_REAL)
+    signal.setitimer(signal.ITIMER_REAL, 0)
 
     def _handle_timeout(_signum, _frame):
         raise TimeoutError(f'"{worker_method}" timed out after {timeout} seconds')
