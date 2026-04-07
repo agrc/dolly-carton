@@ -19,7 +19,20 @@ APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 def _run_with_timeout(worker_method, timeout, *args, **kwargs):
-    """Run a callable with an optional timeout on Unix-like platforms."""
+    """Run a callable with an optional per-attempt timeout.
+
+    Args:
+        worker_method (callable): Callable to execute.
+        timeout (int | float | None): Timeout in seconds for the call. If None,
+            the callable runs without a timeout.
+
+    Returns:
+        various: The value(s) returned by worker_method.
+
+    Raises:
+        TimeoutError: If worker_method exceeds the timeout.
+        ValueError: If timeout is not greater than 0.
+    """
     if timeout is None:
         return worker_method(*args, **kwargs)
 
@@ -40,8 +53,8 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
         signal.signal(signal.SIGALRM, previous_handler)
-        if previous_timer != (0.0, 0.0):
-            signal.setitimer(signal.ITIMER_REAL, *previous_timer)
+        if any(previous_timer):
+            signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
 
 
 #: copied from palletjack

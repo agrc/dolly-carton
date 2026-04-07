@@ -1,5 +1,6 @@
 """Tests for utility functions in dolly.utils module."""
 
+import signal
 import time
 from unittest.mock import patch
 from uuid import uuid4
@@ -874,3 +875,16 @@ class TestRetry:
                 retry(slow_function, timeout=0.01)
 
         assert call_count == 4
+
+    def test_retry_restores_signal_handler_after_timeout(self):
+        """Test that retry restores the SIGALRM handler after timing out."""
+        original_handler = signal.getsignal(signal.SIGALRM)
+
+        def slow_function():
+            time.sleep(1)
+
+        with patch("dolly.utils.sleep"):
+            with pytest.raises(TimeoutError):
+                retry(slow_function, timeout=0.01)
+
+        assert signal.getsignal(signal.SIGALRM) == original_handler
