@@ -43,8 +43,10 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
     previous_timer = signal.getitimer(signal.ITIMER_REAL)
     signal.setitimer(signal.ITIMER_REAL, 0)
 
+    worker_name = getattr(worker_method, "__name__", repr(worker_method))
+
     def _handle_timeout(_signum, _frame):
-        raise TimeoutError(f'"{worker_method}" timed out after {timeout} seconds')
+        raise TimeoutError(f'"{worker_name}" timed out after {timeout} seconds')
 
     try:
         signal.signal(signal.SIGALRM, _handle_timeout)

@@ -874,6 +874,7 @@ class TestRetry:
             with pytest.raises(TimeoutError, match="timed out"):
                 retry(slow_function, timeout=0.01)
 
+        # 1 initial attempt + 3 retries from RETRY_MAX_TRIES
         assert call_count == 4
 
     def test_retry_restores_signal_handler_after_timeout(self):
