@@ -877,6 +877,15 @@ class TestRetry:
         # 1 initial attempt + 3 retries from RETRY_MAX_TRIES
         assert call_count == 4
 
+    def test_retry_rejects_non_positive_timeout(self):
+        """Test that retry rejects timeout values less than or equal to zero."""
+
+        def fast_function():
+            return "done"
+
+        with pytest.raises(ValueError, match="timeout must be greater than 0"):
+            retry(fast_function, timeout=0)
+
     def test_retry_restores_signal_handler_after_timeout(self):
         """Test that retry restores the SIGALRM handler after timing out."""
         original_handler = signal.getsignal(signal.SIGALRM)
@@ -889,3 +898,34 @@ class TestRetry:
                 retry(slow_function, timeout=0.01)
 
         assert signal.getsignal(signal.SIGALRM) == original_handler
+
+    @patch("dolly.utils.signal.getitimer", return_value=(12.5, 0.0))
+    @patch("dolly.utils.signal.setitimer")
+    @patch("dolly.utils.signal.signal")
+    @patch("dolly.utils.signal.getsignal", return_value=signal.SIG_DFL)
+    def test_retry_restores_existing_timer(
+        self,
+        mock_getsignal,
+        mock_signal,
+        mock_setitimer,
+        mock_getitimer,
+    ):
+        """Test that retry restores a previously active alarm timer."""
+
+        def fast_function():
+            return "done"
+
+        result = retry(fast_function, timeout=0.01)
+
+        assert result == "done"
+        mock_getsignal.assert_called_once_with(signal.SIGALRM)
+        mock_getitimer.assert_called_once_with(signal.ITIMER_REAL)
+        assert mock_setitimer.call_args_list[-1].args == (
+            signal.ITIMER_REAL,
+            12.5,
+            0.0,
+        )
+        assert mock_signal.call_args_list[-1].args == (
+            signal.SIGALRM,
+            signal.SIG_DFL,
+        )
