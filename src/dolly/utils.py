@@ -19,7 +19,10 @@ APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
 def _run_with_timeout(worker_method, timeout, *args, **kwargs):
-    """Run a callable with an optional per-attempt timeout.
+    """Run a callable with an optional per-attempt timeout on Linux/Unix.
+
+    This helper is intended for main-thread use in this app's Linux container
+    environment and assumes the process is not otherwise using SIGALRM.
 
     Args:
         worker_method (callable): Callable to execute.
@@ -39,10 +42,6 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
     if timeout <= 0:
         raise ValueError("timeout must be greater than 0")
 
-    previous_handler = signal.getsignal(signal.SIGALRM)
-    previous_timer = signal.getitimer(signal.ITIMER_REAL)
-    signal.setitimer(signal.ITIMER_REAL, 0)
-
     worker_name = getattr(worker_method, "__name__", repr(worker_method))
 
     def _handle_timeout(_signum, _frame):
@@ -55,9 +54,7 @@ def _run_with_timeout(worker_method, timeout, *args, **kwargs):
         return worker_method(*args, **kwargs)
     finally:
         signal.setitimer(signal.ITIMER_REAL, 0)
-        signal.signal(signal.SIGALRM, previous_handler)
-        if previous_timer[0] > 0 or previous_timer[1] > 0:
-            signal.setitimer(signal.ITIMER_REAL, previous_timer[0], previous_timer[1])
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
 
 
 #: copied from palletjack
