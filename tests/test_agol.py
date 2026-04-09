@@ -21,6 +21,10 @@ from dolly.agol import (
 )
 
 
+def test_agol_operation_timeout_is_ten_minutes():
+    assert AGOL_OPERATION_TIMEOUT == 10 * 60
+
+
 class TestGenerateUploadTitle:
     """Test cases for the _generate_upload_title function."""
 

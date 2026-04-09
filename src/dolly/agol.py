@@ -15,7 +15,7 @@ from dolly.utils import get_secrets, get_service_from_title, retry
 logger = logging.getLogger(__name__)
 
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
-AGOL_OPERATION_TIMEOUT = 5 * 60
+AGOL_OPERATION_TIMEOUT = 10 * 60
 
 
 def _generate_upload_title(fgdb_stem: str) -> str:
