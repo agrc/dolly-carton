@@ -6,6 +6,7 @@ from uuid import uuid4
 import pytest
 
 from dolly.utils import (
+    call_with_timeout,
     get_gdal_layer_name,
     get_secrets,
     get_service_from_title,
@@ -858,3 +859,63 @@ class TestRetry:
 
         result = retry(function_returning_none)
         assert result is None
+
+
+class TestCallWithTimeout:
+    """Test cases for the call_with_timeout function."""
+
+    def test_returns_worker_result(self):
+        """The worker is called with forwarded args and its result returned."""
+
+        def worker(value, multiplier=1):
+            return value * multiplier
+
+        result = call_with_timeout(worker, 5, 7, multiplier=3)
+
+        assert result == 21
+
+    def test_raises_timeout_error_when_worker_blocks(self):
+        """A blocking worker is interrupted with TimeoutError after the timeout."""
+        import threading
+        import time
+
+        #: Use an event to release the worker thread after the test asserts
+        #: the timeout, so the ThreadPoolExecutor's daemon thread doesn't
+        #: keep running while other tests execute.
+        release = threading.Event()
+
+        def slow_worker():
+            release.wait(timeout=5)
+            return "never returned in time"
+
+        try:
+            with pytest.raises(TimeoutError, match="timed out after"):
+                call_with_timeout(slow_worker, 0.05)
+        finally:
+            release.set()
+            #: Give the worker a moment to exit before the test tears down
+            time.sleep(0.05)
+
+    def test_propagates_worker_exception(self):
+        """Exceptions raised by the worker are propagated to the caller."""
+
+        def failing_worker():
+            raise RuntimeError("boom")
+
+        with pytest.raises(RuntimeError, match="boom"):
+            call_with_timeout(failing_worker, 5)
+
+    def test_timeout_error_message_includes_worker_name(self):
+        """The TimeoutError message identifies the worker that timed out."""
+        import threading
+
+        release = threading.Event()
+
+        def my_blocking_worker():
+            release.wait(timeout=5)
+
+        try:
+            with pytest.raises(TimeoutError, match="my_blocking_worker"):
+                call_with_timeout(my_blocking_worker, 0.05)
+        finally:
+            release.set()
