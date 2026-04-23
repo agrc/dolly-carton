@@ -15,6 +15,7 @@ from dolly.utils import get_secrets, get_service_from_title, retry
 logger = logging.getLogger(__name__)
 
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
+AGOL_OPERATION_TIMEOUT = 10 * 60
 
 
 def _generate_upload_title(fgdb_stem: str) -> str:
@@ -361,7 +362,7 @@ def _truncate_and_append(
         return True
 
     # Retry the combined operation as a unit
-    return retry(_worker)
+    return retry(_worker, timeout=AGOL_OPERATION_TIMEOUT)
 
 
 def update_feature_services(
@@ -500,6 +501,7 @@ def _create_and_publish_service(
                     "name": fgdb_path.stem
                 },
                 file_type="fileGeodatabase",
+                timeout=AGOL_OPERATION_TIMEOUT,
             ),
         )
 

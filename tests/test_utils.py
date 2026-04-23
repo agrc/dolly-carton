@@ -1,5 +1,7 @@
 """Tests for utility functions in dolly.utils module."""
 
+import signal
+import time
 from unittest.mock import patch
 from uuid import uuid4
 
@@ -343,8 +345,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -359,8 +361,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -419,15 +421,11 @@ class TestGetSecrets:
         # Mock the Path(__file__).parent / "secrets" chain
         mock_file_path = mock_path_class.return_value
         mock_file_path.parent = mock_path_class.return_value
-        mock_file_path.parent.__truediv__ = (
-            lambda self, other: mock_local_folder
-            if other == "secrets"
-            else mock_path_class.return_value
+        mock_file_path.parent.__truediv__ = lambda self, other: (
+            mock_local_folder if other == "secrets" else mock_path_class.return_value
         )
-        mock_local_folder.__truediv__ = (
-            lambda self, other: mock_local_file
-            if other == "secrets.json"
-            else mock_path_class.return_value
+        mock_local_folder.__truediv__ = lambda self, other: (
+            mock_local_file if other == "secrets.json" else mock_path_class.return_value
         )
 
         def path_constructor(path_str):
@@ -474,13 +472,13 @@ class TestGetSecrets:
             # Mock the Path(__file__).parent / "secrets" chain
             mock_file_path = mock_path_class.return_value
             mock_file_path.parent = mock_path_class.return_value
-            mock_file_path.parent.__truediv__ = (
-                lambda self, other: mock_local_folder
+            mock_file_path.parent.__truediv__ = lambda self, other: (
+                mock_local_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
-            mock_local_folder.__truediv__ = (
-                lambda self, other: mock_local_file
+            mock_local_folder.__truediv__ = lambda self, other: (
+                mock_local_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -558,8 +556,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -569,8 +567,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -632,8 +630,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -643,8 +641,8 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -862,3 +860,41 @@ class TestRetry:
 
         result = retry(function_returning_none)
         assert result is None
+
+    def test_retry_times_out_and_retries(self):
+        """Test that retry raises TimeoutError when an attempt exceeds the timeout."""
+        call_count = 0
+
+        def slow_function():
+            nonlocal call_count
+            call_count += 1
+            time.sleep(1)
+
+        with patch("dolly.utils.sleep"):
+            with pytest.raises(TimeoutError, match="timed out"):
+                retry(slow_function, timeout=0.01)
+
+        # 1 initial attempt + 3 retries from RETRY_MAX_TRIES
+        assert call_count == 4
+
+    def test_retry_rejects_non_positive_timeout(self):
+        """Test that retry rejects timeout values less than or equal to zero."""
+
+        def fast_function():
+            return "done"
+
+        with pytest.raises(ValueError, match="timeout must be greater than 0"):
+            retry(fast_function, timeout=0)
+
+    def test_retry_restores_signal_handler_after_timeout(self):
+        """Test that retry clears the timer and resets SIGALRM after timing out."""
+
+        def slow_function():
+            time.sleep(1)
+
+        with patch("dolly.utils.sleep"):
+            with pytest.raises(TimeoutError):
+                retry(slow_function, timeout=0.01)
+
+        assert signal.getsignal(signal.SIGALRM) == signal.SIG_DFL
+        assert signal.getitimer(signal.ITIMER_REAL) == (0.0, 0.0)

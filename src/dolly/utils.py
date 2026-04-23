@@ -2,6 +2,7 @@ import json
 import logging
 import os
 import re
+import signal
 import sys
 from pathlib import Path
 from time import sleep
@@ -17,8 +18,47 @@ FGDB_PATH = OUTPUT_PATH / "upload.gdb"
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 
 
+def _run_with_timeout(worker_method, timeout, *args, **kwargs):
+    """Run a callable with an optional per-attempt timeout on Linux/Unix.
+
+    This helper is intended for main-thread use in this app's Linux container
+    environment and assumes the process is not otherwise using SIGALRM.
+
+    Args:
+        worker_method (callable): Callable to execute.
+        timeout (int | float | None): Timeout in seconds for the call. If None,
+            the callable runs without a timeout.
+
+    Returns:
+        various: The value(s) returned by worker_method.
+
+    Raises:
+        TimeoutError: If worker_method exceeds the timeout.
+        ValueError: If timeout is not greater than 0.
+    """
+    if timeout is None:
+        return worker_method(*args, **kwargs)
+
+    if timeout <= 0:
+        raise ValueError("timeout must be greater than 0")
+
+    worker_name = getattr(worker_method, "__name__", repr(worker_method))
+
+    def _handle_timeout(_signum, _frame):
+        raise TimeoutError(f'"{worker_name}" timed out after {timeout} seconds')
+
+    try:
+        signal.signal(signal.SIGALRM, _handle_timeout)
+        signal.setitimer(signal.ITIMER_REAL, timeout)
+
+        return worker_method(*args, **kwargs)
+    finally:
+        signal.setitimer(signal.ITIMER_REAL, 0)
+        signal.signal(signal.SIGALRM, signal.SIG_DFL)
+
+
 #: copied from palletjack
-def retry(worker_method, *args, **kwargs):
+def retry(worker_method, *args, timeout=None, **kwargs):
     """Allows you to retry a function/method to overcome network jitters or other transient errors.
 
     Retries worker_method RETRY_MAX_TRIES times (for a total of n+1 tries, including the initial attempt), pausing
@@ -30,6 +70,7 @@ def retry(worker_method, *args, **kwargs):
 
     Args:
         worker_method (callable): The name of the method to be retried (minus the calling parens)
+        timeout (int | float | None): Optional timeout in seconds applied to each attempt
 
     Raises:
         error: The final error that causes worker_method to fail after 3 retries
@@ -51,7 +92,7 @@ def retry(worker_method, *args, **kwargs):
         nonlocal tries
 
         try:
-            return worker_method(*args, **kwargs)
+            return _run_with_timeout(worker_method, timeout, *args, **kwargs)
 
         #: ArcGIS API for Python loves throwing bog-standard Exceptions, so we can't narrow this down further
         except Exception as error:
