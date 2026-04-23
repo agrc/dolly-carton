@@ -10,7 +10,13 @@ from arcgis.gis import GIS, Item
 from dolly.internal import create_fgdb, update_agol_item
 from dolly.state import set_table_hash
 from dolly.summary import get_current_summary
-from dolly.utils import get_secrets, get_service_from_title, retry
+from dolly.utils import (
+    AGOL_CALL_TIMEOUT,
+    call_with_timeout,
+    get_secrets,
+    get_service_from_title,
+    retry,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -332,7 +338,9 @@ def _truncate_and_append(
         logger.info("truncating...")
         truncate_result = cast(
             dict,
-            service_item.manager.truncate(
+            call_with_timeout(
+                service_item.manager.truncate,
+                AGOL_CALL_TIMEOUT,
                 asynchronous=True,
                 wait=True,
             ),
@@ -341,7 +349,9 @@ def _truncate_and_append(
             raise RuntimeError("Failed to truncate existing data in service")
 
         logger.info(f"appending: {service_name}")
-        append_result = service_item.append(
+        append_result = call_with_timeout(
+            service_item.append,
+            AGOL_CALL_TIMEOUT,
             item_id=gdb_item.id,
             upload_format="filegdb",
             source_table_name=service_name,
@@ -494,7 +504,9 @@ def _create_and_publish_service(
         item = cast(
             Item,
             retry(
+                call_with_timeout,
                 single_item.publish,
+                AGOL_CALL_TIMEOUT,
                 publish_parameters={
                     #: use open sgid naming convention for the feature service (with category prefix) and layer/table
                     "name": fgdb_path.stem

@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import logging
 import os
@@ -11,6 +12,12 @@ module_logger = logging.getLogger(__name__)
 
 RETRY_MAX_TRIES = 3
 RETRY_DELAY_TIME = 2
+
+#: Default timeout (in seconds) for AGOL calls that otherwise have no
+#: client-side timeout. Used by `call_with_timeout` as a safety net so that
+#: functions like `append`, `truncate`, and `publish` cannot hang forever if
+#: AGOL leaves a job in a pending state indefinitely.
+AGOL_CALL_TIMEOUT = 20 * 60
 
 OUTPUT_PATH = Path("output")
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
@@ -71,6 +78,56 @@ def retry(worker_method, *args, **kwargs):
                 raise error
 
     return _inner_retry(worker_method, *args, **kwargs)
+
+
+def call_with_timeout(worker_method, timeout_seconds, *args, **kwargs):
+    """Call a function with a client-side timeout.
+
+    Several ArcGIS Python API functions (e.g., :meth:`Item.publish`,
+    :meth:`FeatureLayer.append`, :meth:`FeatureLayerManager.truncate`) do not
+    expose a timeout parameter, so if AGOL leaves a job in a pending state
+    indefinitely those calls will hang forever. This helper runs
+    ``worker_method`` in a single-worker
+    :class:`~concurrent.futures.ThreadPoolExecutor` and waits up to
+    ``timeout_seconds`` for it to complete. If the timeout elapses, a
+    :class:`TimeoutError` is raised so the caller (typically wrapped by
+    :func:`retry`) can recover instead of hanging.
+
+    Note: the worker thread cannot be forcibly cancelled once it has started
+    running — but the calling thread is freed so :func:`retry` can take over.
+
+    Args:
+        worker_method (callable): The function to invoke.
+        timeout_seconds (float): Maximum number of seconds to wait for
+            ``worker_method`` to complete.
+        *args: Positional arguments forwarded to ``worker_method``.
+        **kwargs: Keyword arguments forwarded to ``worker_method``.
+
+    Raises:
+        TimeoutError: If ``worker_method`` does not complete within
+            ``timeout_seconds``.
+
+    Returns:
+        The value produced by ``worker_method``.
+    """
+    executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    future = executor.submit(worker_method, *args, **kwargs)
+
+    try:
+        return future.result(timeout=timeout_seconds)
+    except concurrent.futures.TimeoutError as error:
+        #: Best-effort cancellation; the underlying call cannot actually be
+        #: cancelled once it has started running, but the calling thread is
+        #: freed so retry() can take over.
+        future.cancel()
+
+        raise TimeoutError(
+            f"Call to {getattr(worker_method, '__qualname__', repr(worker_method))} "
+            f"timed out after {timeout_seconds} seconds"
+        ) from error
+    finally:
+        #: Do not block shutdown on a potentially hung worker thread.
+        executor.shutdown(wait=False)
 
 
 def get_secrets():

@@ -981,8 +981,15 @@ class TestCreateAndPublishService:
         # Verify function calls
         mock_create_fgdb.assert_called_once_with([table], agol_items_lookup)
         mock_zip_upload.assert_called_once_with(fgdb_path, mock_gis)
+        #: publish is wrapped with call_with_timeout inside retry so that
+        #: AGOL calls cannot hang forever
+        from dolly.agol import AGOL_CALL_TIMEOUT
+        from dolly.utils import call_with_timeout
+
         mock_retry.assert_called_once_with(
+            call_with_timeout,
             mock_single_item.publish,
+            AGOL_CALL_TIMEOUT,
             publish_parameters={"name": fgdb_path.stem},
             file_type="fileGeodatabase",
         )
