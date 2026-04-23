@@ -1,3 +1,4 @@
+import concurrent.futures
 import json
 import logging
 import os
@@ -11,6 +12,12 @@ module_logger = logging.getLogger(__name__)
 
 RETRY_MAX_TRIES = 3
 RETRY_DELAY_TIME = 2
+
+#: Default timeout (in seconds) for AGOL calls that otherwise have no
+#: client-side timeout. Used by `call_with_timeout` as a safety net so that
+#: functions like `append`, `truncate`, and `publish` cannot hang forever if
+#: AGOL leaves a job in a pending state indefinitely.
+AGOL_CALL_TIMEOUT = 3600
 
 OUTPUT_PATH = Path("output")
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
@@ -71,6 +78,61 @@ def retry(worker_method, *args, **kwargs):
                 raise error
 
     return _inner_retry(worker_method, *args, **kwargs)
+
+
+def call_with_timeout(worker_method, timeout_seconds, *args, **kwargs):
+    """Call an ArcGIS API function with a client-side timeout.
+
+    Several ArcGIS Python API functions (e.g., ``Item.publish``,
+    ``FeatureLayer.append``, ``FeatureLayerManager.truncate``) do not expose a
+    timeout parameter. If AGOL leaves a job in a pending state indefinitely,
+    those calls will hang forever. These functions do, however, accept a
+    ``future=True`` keyword that changes their return type to a
+    :class:`concurrent.futures.Future`, which supports a timeout when
+    retrieving the result.
+
+    This helper injects ``future=True`` into ``kwargs``, invokes
+    ``worker_method``, and waits up to ``timeout_seconds`` for the resulting
+    future to complete. If the timeout elapses, a :class:`TimeoutError` is
+    raised (and the future is cancelled on a best-effort basis) so callers
+    (typically wrapped by :func:`retry`) can recover instead of hanging.
+
+    Args:
+        worker_method (callable): The ArcGIS API method to invoke.
+        timeout_seconds (float): Maximum number of seconds to wait for the
+            underlying future to complete.
+        *args: Positional arguments forwarded to ``worker_method``.
+        **kwargs: Keyword arguments forwarded to ``worker_method``. A
+            ``future=True`` entry is injected automatically.
+
+    Raises:
+        TimeoutError: If the underlying future does not complete within
+            ``timeout_seconds``.
+
+    Returns:
+        The value produced by the future (i.e., what ``worker_method`` would
+        normally return when called without ``future=True``).
+    """
+    kwargs["future"] = True
+    future = worker_method(*args, **kwargs)
+
+    try:
+        return future.result(timeout=timeout_seconds)
+    except concurrent.futures.TimeoutError as error:
+        #: Best-effort cancellation; many ArcGIS futures cannot be cancelled
+        #: once running, but we try anyway so resources are released when
+        #: possible.
+        try:
+            future.cancel()
+        except Exception:  # pragma: no cover - defensive
+            module_logger.debug(
+                "Failed to cancel future for %s after timeout", worker_method
+            )
+
+        raise TimeoutError(
+            f"Call to {getattr(worker_method, '__qualname__', repr(worker_method))} "
+            f"timed out after {timeout_seconds} seconds"
+        ) from error
 
 
 def get_secrets():

@@ -1,11 +1,13 @@
 """Tests for utility functions in dolly.utils module."""
 
-from unittest.mock import patch
+import concurrent.futures
+from unittest.mock import MagicMock, patch
 from uuid import uuid4
 
 import pytest
 
 from dolly.utils import (
+    call_with_timeout,
     get_gdal_layer_name,
     get_secrets,
     get_service_from_title,
@@ -862,3 +864,56 @@ class TestRetry:
 
         result = retry(function_returning_none)
         assert result is None
+
+
+class TestCallWithTimeout:
+    """Test cases for the call_with_timeout function."""
+
+    def test_passes_future_true_and_returns_result(self):
+        """Injects future=True and returns the future's result."""
+        future = MagicMock(spec=concurrent.futures.Future)
+        future.result.return_value = "ok"
+
+        worker = MagicMock(return_value=future)
+
+        result = call_with_timeout(worker, 30, "arg1", keyword_arg="value")
+
+        assert result == "ok"
+        worker.assert_called_once_with("arg1", keyword_arg="value", future=True)
+        future.result.assert_called_once_with(timeout=30)
+
+    def test_raises_timeout_error_when_future_times_out(self):
+        """A concurrent.futures.TimeoutError is converted to a TimeoutError."""
+        future = MagicMock(spec=concurrent.futures.Future)
+        future.result.side_effect = concurrent.futures.TimeoutError()
+
+        worker = MagicMock(return_value=future)
+
+        with pytest.raises(TimeoutError, match="timed out after 5 seconds"):
+            call_with_timeout(worker, 5)
+
+        #: Best-effort cancellation is attempted
+        future.cancel.assert_called_once()
+
+    def test_propagates_worker_exception(self):
+        """Exceptions raised by the future are propagated to the caller."""
+        future = MagicMock(spec=concurrent.futures.Future)
+        future.result.side_effect = RuntimeError("boom")
+
+        worker = MagicMock(return_value=future)
+
+        with pytest.raises(RuntimeError, match="boom"):
+            call_with_timeout(worker, 10)
+
+    def test_overrides_existing_future_kwarg(self):
+        """An explicit future=False kwarg is overridden to force Future semantics."""
+        future = MagicMock(spec=concurrent.futures.Future)
+        future.result.return_value = 42
+        worker = MagicMock(return_value=future)
+
+        result = call_with_timeout(worker, 1, future=False)
+
+        assert result == 42
+        #: the future kwarg passed to the worker must always be True
+        _, kwargs = worker.call_args
+        assert kwargs["future"] is True
