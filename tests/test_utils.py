@@ -917,3 +917,50 @@ class TestCallWithTimeout:
         #: the future kwarg passed to the worker must always be True
         _, kwargs = worker.call_args
         assert kwargs["future"] is True
+
+    def test_executor_fallback_when_future_not_supported(self):
+        """Functions without a ``future`` kwarg run via ThreadPoolExecutor."""
+
+        def truncate_like(asynchronous=False, wait=True):
+            #: no `future` parameter, mirroring FeatureLayerManager.truncate
+            return {"status": "Completed", "asynchronous": asynchronous, "wait": wait}
+
+        result = call_with_timeout(truncate_like, 5, asynchronous=True, wait=True)
+
+        assert result == {
+            "status": "Completed",
+            "asynchronous": True,
+            "wait": True,
+        }
+
+    def test_executor_fallback_raises_timeout_error(self):
+        """The executor fallback also enforces the timeout."""
+        import threading
+        import time
+
+        #: Use an event to cleanly release the worker thread after the test
+        #: so the ThreadPoolExecutor's daemon thread does not keep running
+        #: forever while other tests execute.
+        release = threading.Event()
+
+        def slow_blocking(wait=True):
+            #: no `future` parameter, so the executor fallback path is used
+            release.wait(timeout=5)
+            return "never returned in time"
+
+        try:
+            with pytest.raises(TimeoutError, match="timed out after"):
+                call_with_timeout(slow_blocking, 0.05, wait=True)
+        finally:
+            release.set()
+            #: Give the worker a moment to exit before the test tears down
+            time.sleep(0.05)
+
+    def test_executor_fallback_propagates_worker_exception(self):
+        """Exceptions from executor-run workers are surfaced to the caller."""
+
+        def truncate_like(asynchronous=False, wait=True):
+            raise RuntimeError("truncate failed")
+
+        with pytest.raises(RuntimeError, match="truncate failed"):
+            call_with_timeout(truncate_like, 5, asynchronous=True)
