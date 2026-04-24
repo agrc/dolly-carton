@@ -580,32 +580,50 @@ class TestTruncateAndAppend:
         self.mock_gdb_item = Mock()
         self.mock_gdb_item.id = "gdb-id"
 
+    @staticmethod
+    def _future(value):
+        """Build a mock concurrent.futures.Future that yields ``value``."""
+        future = Mock()
+        future.result.return_value = value
+        return future
+
     def test_success_bool_tuple(self):
         # Simulate truncate success and append returning (True, messages)
-        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
-        self.mock_service.append.return_value = (True, [])
+        self.mock_service.manager.truncate.return_value = self._future(
+            {"status": "Completed"}
+        )
+        self.mock_service.append.return_value = self._future((True, []))
 
         assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
         self.mock_service.manager.truncate.assert_called_once()
         self.mock_service.append.assert_called_once()
+        #: ensure future=True is passed through call_with_timeout
+        assert self.mock_service.manager.truncate.call_args.kwargs["future"] is True
+        assert self.mock_service.append.call_args.kwargs["future"] is True
 
     def test_success_bool_only(self):
         # Simulate append returning just True
-        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
-        self.mock_service.append.return_value = True
+        self.mock_service.manager.truncate.return_value = self._future(
+            {"status": "Completed"}
+        )
+        self.mock_service.append.return_value = self._future(True)
 
         assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
     def test_truncate_failure_raises(self):
-        self.mock_service.manager.truncate.return_value = {"status": "Failed"}
+        self.mock_service.manager.truncate.return_value = self._future(
+            {"status": "Failed"}
+        )
 
         with pytest.raises(RuntimeError, match="Failed to truncate"):
             _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
     def test_append_failure_raises(self):
-        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        self.mock_service.manager.truncate.return_value = self._future(
+            {"status": "Completed"}
+        )
         # Simulate append returning (False, messages)
-        self.mock_service.append.return_value = (False, ["error"])
+        self.mock_service.append.return_value = self._future((False, ["error"]))
 
         with pytest.raises(RuntimeError, match="Append failed"):
             _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
@@ -981,8 +999,15 @@ class TestCreateAndPublishService:
         # Verify function calls
         mock_create_fgdb.assert_called_once_with([table], agol_items_lookup)
         mock_zip_upload.assert_called_once_with(fgdb_path, mock_gis)
+        #: publish is wrapped with call_with_timeout inside retry so that
+        #: AGOL calls cannot hang forever
+        from dolly.agol import AGOL_CALL_TIMEOUT
+        from dolly.utils import call_with_timeout
+
         mock_retry.assert_called_once_with(
+            call_with_timeout,
             mock_single_item.publish,
+            AGOL_CALL_TIMEOUT,
             publish_parameters={"name": fgdb_path.stem},
             file_type="fileGeodatabase",
         )
