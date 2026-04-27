@@ -1,7 +1,6 @@
 """Tests for utility functions in dolly.utils module."""
 
-import concurrent.futures
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
@@ -869,98 +868,77 @@ class TestRetry:
 class TestCallWithTimeout:
     """Test cases for the call_with_timeout function."""
 
-    def test_passes_future_true_and_returns_result(self):
-        """Injects future=True and returns the future's result."""
-        future = MagicMock(spec=concurrent.futures.Future)
-        future.result.return_value = "ok"
+    def test_returns_worker_result(self):
+        """The worker is called with forwarded args and its result returned."""
 
-        worker = MagicMock(return_value=future)
+        def worker(value, multiplier=1):
+            return value * multiplier
 
-        result = call_with_timeout(worker, 30, "arg1", keyword_arg="value")
+        result = call_with_timeout(worker, 5, 7, multiplier=3)
+
+        assert result == 21
+
+    def test_does_not_inject_future_kwarg(self):
+        """``call_with_timeout`` must not add a ``future`` kwarg to the worker.
+
+        Several ArcGIS API methods (e.g. ``FeatureLayerManager.truncate``) do
+        not accept a ``future`` parameter, so the helper must forward only
+        the kwargs supplied by the caller.
+        """
+        seen_kwargs = {}
+
+        def worker(**kwargs):
+            seen_kwargs.update(kwargs)
+            return "ok"
+
+        result = call_with_timeout(worker, 5, asynchronous=True, wait=True)
 
         assert result == "ok"
-        worker.assert_called_once_with("arg1", keyword_arg="value", future=True)
-        future.result.assert_called_once_with(timeout=30)
+        assert seen_kwargs == {"asynchronous": True, "wait": True}
+        assert "future" not in seen_kwargs
 
-    def test_raises_timeout_error_when_future_times_out(self):
-        """A concurrent.futures.TimeoutError is converted to a TimeoutError."""
-        future = MagicMock(spec=concurrent.futures.Future)
-        future.result.side_effect = concurrent.futures.TimeoutError()
-
-        worker = MagicMock(return_value=future)
-
-        with pytest.raises(TimeoutError, match="timed out after 5 seconds"):
-            call_with_timeout(worker, 5)
-
-        #: Best-effort cancellation is attempted
-        future.cancel.assert_called_once()
-
-    def test_propagates_worker_exception(self):
-        """Exceptions raised by the future are propagated to the caller."""
-        future = MagicMock(spec=concurrent.futures.Future)
-        future.result.side_effect = RuntimeError("boom")
-
-        worker = MagicMock(return_value=future)
-
-        with pytest.raises(RuntimeError, match="boom"):
-            call_with_timeout(worker, 10)
-
-    def test_overrides_existing_future_kwarg(self):
-        """An explicit future=False kwarg is overridden to force Future semantics."""
-        future = MagicMock(spec=concurrent.futures.Future)
-        future.result.return_value = 42
-        worker = MagicMock(return_value=future)
-
-        result = call_with_timeout(worker, 1, future=False)
-
-        assert result == 42
-        #: the future kwarg passed to the worker must always be True
-        _, kwargs = worker.call_args
-        assert kwargs["future"] is True
-
-    def test_executor_fallback_when_future_not_supported(self):
-        """Functions without a ``future`` kwarg run via ThreadPoolExecutor."""
-
-        def truncate_like(asynchronous=False, wait=True):
-            #: no `future` parameter, mirroring FeatureLayerManager.truncate
-            return {"status": "Completed", "asynchronous": asynchronous, "wait": wait}
-
-        result = call_with_timeout(truncate_like, 5, asynchronous=True, wait=True)
-
-        assert result == {
-            "status": "Completed",
-            "asynchronous": True,
-            "wait": True,
-        }
-
-    def test_executor_fallback_raises_timeout_error(self):
-        """The executor fallback also enforces the timeout."""
+    def test_raises_timeout_error_when_worker_blocks(self):
+        """A blocking worker is interrupted with TimeoutError after the timeout."""
         import threading
         import time
 
-        #: Use an event to cleanly release the worker thread after the test
-        #: so the ThreadPoolExecutor's daemon thread does not keep running
-        #: forever while other tests execute.
+        #: Use an event to release the worker thread after the test asserts
+        #: the timeout, so the ThreadPoolExecutor's daemon thread doesn't
+        #: keep running while other tests execute.
         release = threading.Event()
 
-        def slow_blocking(wait=True):
-            #: no `future` parameter, so the executor fallback path is used
+        def slow_worker():
             release.wait(timeout=5)
             return "never returned in time"
 
         try:
             with pytest.raises(TimeoutError, match="timed out after"):
-                call_with_timeout(slow_blocking, 0.05, wait=True)
+                call_with_timeout(slow_worker, 0.05)
         finally:
             release.set()
             #: Give the worker a moment to exit before the test tears down
             time.sleep(0.05)
 
-    def test_executor_fallback_propagates_worker_exception(self):
-        """Exceptions from executor-run workers are surfaced to the caller."""
+    def test_propagates_worker_exception(self):
+        """Exceptions raised by the worker are propagated to the caller."""
 
-        def truncate_like(asynchronous=False, wait=True):
-            raise RuntimeError("truncate failed")
+        def failing_worker():
+            raise RuntimeError("boom")
 
-        with pytest.raises(RuntimeError, match="truncate failed"):
-            call_with_timeout(truncate_like, 5, asynchronous=True)
+        with pytest.raises(RuntimeError, match="boom"):
+            call_with_timeout(failing_worker, 5)
+
+    def test_timeout_error_message_includes_worker_name(self):
+        """The TimeoutError message identifies the worker that timed out."""
+        import threading
+
+        release = threading.Event()
+
+        def my_blocking_worker():
+            release.wait(timeout=5)
+
+        try:
+            with pytest.raises(TimeoutError, match="my_blocking_worker"):
+                call_with_timeout(my_blocking_worker, 0.05)
+        finally:
+            release.set()

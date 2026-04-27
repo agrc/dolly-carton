@@ -580,50 +580,36 @@ class TestTruncateAndAppend:
         self.mock_gdb_item = Mock()
         self.mock_gdb_item.id = "gdb-id"
 
-    @staticmethod
-    def _future(value):
-        """Build a mock concurrent.futures.Future that yields ``value``."""
-        future = Mock()
-        future.result.return_value = value
-        return future
-
     def test_success_bool_tuple(self):
         # Simulate truncate success and append returning (True, messages)
-        self.mock_service.manager.truncate.return_value = self._future(
-            {"status": "Completed"}
-        )
-        self.mock_service.append.return_value = self._future((True, []))
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        self.mock_service.append.return_value = (True, [])
 
         assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
         self.mock_service.manager.truncate.assert_called_once()
         self.mock_service.append.assert_called_once()
-        #: ensure future=True is passed through call_with_timeout
-        assert self.mock_service.manager.truncate.call_args.kwargs["future"] is True
-        assert self.mock_service.append.call_args.kwargs["future"] is True
+        #: call_with_timeout always uses ThreadPoolExecutor, so no `future`
+        #: kwarg should be injected into the underlying ArcGIS calls.
+        assert "future" not in self.mock_service.manager.truncate.call_args.kwargs
+        assert "future" not in self.mock_service.append.call_args.kwargs
 
     def test_success_bool_only(self):
         # Simulate append returning just True
-        self.mock_service.manager.truncate.return_value = self._future(
-            {"status": "Completed"}
-        )
-        self.mock_service.append.return_value = self._future(True)
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
+        self.mock_service.append.return_value = True
 
         assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
     def test_truncate_failure_raises(self):
-        self.mock_service.manager.truncate.return_value = self._future(
-            {"status": "Failed"}
-        )
+        self.mock_service.manager.truncate.return_value = {"status": "Failed"}
 
         with pytest.raises(RuntimeError, match="Failed to truncate"):
             _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
 
     def test_append_failure_raises(self):
-        self.mock_service.manager.truncate.return_value = self._future(
-            {"status": "Completed"}
-        )
+        self.mock_service.manager.truncate.return_value = {"status": "Completed"}
         # Simulate append returning (False, messages)
-        self.mock_service.append.return_value = self._future((False, ["error"]))
+        self.mock_service.append.return_value = (False, ["error"])
 
         with pytest.raises(RuntimeError, match="Append failed"):
             _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
