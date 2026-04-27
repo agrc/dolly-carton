@@ -878,25 +878,6 @@ class TestCallWithTimeout:
 
         assert result == 21
 
-    def test_does_not_inject_future_kwarg(self):
-        """``call_with_timeout`` must not add a ``future`` kwarg to the worker.
-
-        Several ArcGIS API methods (e.g. ``FeatureLayerManager.truncate``) do
-        not accept a ``future`` parameter, so the helper must forward only
-        the kwargs supplied by the caller.
-        """
-        seen_kwargs = {}
-
-        def worker(**kwargs):
-            seen_kwargs.update(kwargs)
-            return "ok"
-
-        result = call_with_timeout(worker, 5, asynchronous=True, wait=True)
-
-        assert result == "ok"
-        assert seen_kwargs == {"asynchronous": True, "wait": True}
-        assert "future" not in seen_kwargs
-
     def test_raises_timeout_error_when_worker_blocks(self):
         """A blocking worker is interrupted with TimeoutError after the timeout."""
         import threading

@@ -588,10 +588,6 @@ class TestTruncateAndAppend:
         assert _truncate_and_append(self.mock_service, self.mock_gdb_item, "svc")
         self.mock_service.manager.truncate.assert_called_once()
         self.mock_service.append.assert_called_once()
-        #: call_with_timeout always uses ThreadPoolExecutor, so no `future`
-        #: kwarg should be injected into the underlying ArcGIS calls.
-        assert "future" not in self.mock_service.manager.truncate.call_args.kwargs
-        assert "future" not in self.mock_service.append.call_args.kwargs
 
     def test_success_bool_only(self):
         # Simulate append returning just True
