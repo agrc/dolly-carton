@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.0](https://github.com/agrc/dolly-carton/compare/v1.0.8...v1.1.0) (2026-05-08)
+
+
+### Features
+
+* add call_with_timeout utility for AGOL calls that can hang indefinitely ([f7168f6](https://github.com/agrc/dolly-carton/commit/f7168f676ca2cc9ede188be11fe3f175aae35d23))
+* upgrade to use supervisor for slack messaging ([82ea3c0](https://github.com/agrc/dolly-carton/commit/82ea3c032bf1bd4b3b6537a134227e088bc38cb7))
+
 ## [1.0.8](https://github.com/agrc/dolly-carton/compare/v1.0.7...v1.0.8) (2026-02-13)
 
 
