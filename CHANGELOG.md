@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.0.9](https://github.com/agrc/dolly-carton/compare/v1.0.8...v1.0.9) (2026-11-09)
+
+
+### Features
+
+* add call_with_timeout utility for AGOL calls that can hang indefinitely ([f7168f6](https://github.com/agrc/dolly-carton/commit/f7168f676ca2cc9ede188be11fe3f175aae35d23))
+* upgrade to use supervisor for slack messaging ([82ea3c0](https://github.com/agrc/dolly-carton/commit/82ea3c032bf1bd4b3b6537a134227e088bc38cb7))
+
+
+### Bug Fixes
+
+* resolve CI Ruff lint failures ([7964693](https://github.com/agrc/dolly-carton/commit/79646933b659c9fa6d0a744209354ff9ff711a8c))
+* skip stale Arrow apt source in test image ([0dc0b0a](https://github.com/agrc/dolly-carton/commit/0dc0b0ae21e1a63bf3d08f35c67f302aadd7c97d))
+
 ## [1.0.8](https://github.com/agrc/dolly-carton/compare/v1.0.7...v1.0.8) (2026-02-13)
 
 
