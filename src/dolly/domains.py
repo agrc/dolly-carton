@@ -1,7 +1,6 @@
 import logging
 import xml.etree.ElementTree as ET
 from textwrap import dedent
-from typing import Dict, Optional
 
 import pyodbc
 from osgeo import gdal, ogr
@@ -9,7 +8,7 @@ from osgeo import gdal, ogr
 logger = logging.getLogger(__name__)
 
 
-def get_domain_metadata(connection: pyodbc.Connection) -> Dict[str, Dict]:
+def get_domain_metadata(connection: pyodbc.Connection) -> dict[str, dict]:
     """
     Get domain metadata from the geodatabase.
 
@@ -49,7 +48,7 @@ def get_domain_metadata(connection: pyodbc.Connection) -> Dict[str, Dict]:
     return domains
 
 
-def parse_domain_xml(xml_string: str) -> Optional[Dict]:
+def parse_domain_xml(xml_string: str) -> dict | None:
     """
     Parse domain XML definition into a structured dictionary.
 
@@ -78,7 +77,7 @@ def parse_domain_xml(xml_string: str) -> Optional[Dict]:
         return None
 
 
-def parse_coded_value_domain(root: ET.Element) -> Dict:
+def parse_coded_value_domain(root: ET.Element) -> dict:
     """
     Parse coded value domain from XML element.
 
@@ -128,7 +127,7 @@ def parse_coded_value_domain(root: ET.Element) -> Dict:
     return domain_info
 
 
-def parse_range_domain(root: ET.Element) -> Dict:
+def parse_range_domain(root: ET.Element) -> dict:
     """
     Parse range domain from XML element.
 
@@ -163,7 +162,7 @@ def parse_range_domain(root: ET.Element) -> Dict:
 
 def get_table_field_domains(
     table_name: str, connection: pyodbc.Connection
-) -> Dict[str, str]:
+) -> dict[str, str]:
     """
     Get field-to-domain mappings for a specific table.
 
@@ -204,7 +203,7 @@ def get_table_field_domains(
     return field_domains
 
 
-def parse_table_field_domains(xml_string: str) -> Dict[str, str]:
+def parse_table_field_domains(xml_string: str) -> dict[str, str]:
     """
     Parse table XML definition to extract field domain associations.
 
@@ -240,7 +239,7 @@ def parse_table_field_domains(xml_string: str) -> Dict[str, str]:
         return {}
 
 
-def create_domains_in_fgdb(domains: Dict[str, Dict], fgdb_path: str) -> bool:
+def create_domains_in_fgdb(domains: dict[str, dict], fgdb_path: str) -> bool:
     """
     Create domains in the File Geodatabase.
 
@@ -287,14 +286,14 @@ def create_domains_in_fgdb(domains: Dict[str, Dict], fgdb_path: str) -> bool:
 
         return success_count > 0
 
-    except Exception as e:
-        logger.error(f"Error creating domains in FGDB: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Error creating domains in FGDB")
 
         return False
 
 
 def create_coded_value_domain(
-    fgdb_ds: gdal.Dataset, domain_name: str, domain_info: Dict
+    fgdb_ds: gdal.Dataset, domain_name: str, domain_info: dict
 ) -> bool:
     """
     Create a coded value domain in the FGDB using GDAL's domain support.
@@ -364,16 +363,14 @@ def create_coded_value_domain(
         )
         return True
 
-    except Exception as e:
-        logger.error(
-            f"Failed to create coded value domain {domain_name}: {e}", exc_info=True
-        )
+    except Exception:
+        logger.exception(f"Failed to create coded value domain {domain_name}")
 
         return False
 
 
 def create_range_domain(
-    fgdb_ds: gdal.Dataset, domain_name: str, domain_info: Dict
+    fgdb_ds: gdal.Dataset, domain_name: str, domain_info: dict
 ) -> bool:
     """
     Create a range domain in the FGDB using GDAL's domain support.
@@ -419,11 +416,8 @@ def create_range_domain(
                 )
 
                 return False
-        except ValueError as e:
-            logger.error(
-                f"Failed to convert range values for domain {domain_name}: {e}",
-                exc_info=True,
-            )
+        except ValueError:
+            logger.exception(f"Failed to convert range values for domain {domain_name}")
 
             return False
 
@@ -451,14 +445,14 @@ def create_range_domain(
         )
         return True
 
-    except Exception as e:
-        logger.error(f"Failed to create range domain {domain_name}: {e}", exc_info=True)
+    except Exception:
+        logger.exception(f"Failed to create range domain {domain_name}")
 
         return False
 
 
 def apply_domains_to_fields(
-    fgdb_path: str, table_field_domains: Dict[str, Dict[str, str]]
+    fgdb_path: str, table_field_domains: dict[str, dict[str, str]]
 ) -> bool:
     """
     Apply domain associations to fields in the copied tables.
@@ -547,7 +541,7 @@ def apply_domains_to_fields(
                     )
                     success_count += 1
 
-                except Exception as e:
+                except Exception as e:  # noqa: BLE001
                     logger.warning(
                         f"Error applying domain {domain_name} to field {field_name}: {e}"
                     )
@@ -559,7 +553,7 @@ def apply_domains_to_fields(
         )
         return success_count > 0
 
-    except Exception as e:
-        logger.error(f"Error applying domain associations: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Error applying domain associations")
 
         return False

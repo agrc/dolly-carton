@@ -4,8 +4,8 @@ from pathlib import Path
 from unittest.mock import Mock, patch
 
 from dolly.internal import (
-    _count_features_in_internal_table,
     _count_features_in_fgdb_layer,
+    _count_features_in_internal_table,
 )
 
 

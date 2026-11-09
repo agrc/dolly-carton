@@ -146,9 +146,7 @@ def _search_existing_item(title: str, gis_connection: GIS) -> list[Item]:
             max_items=1,
         )
     except Exception:
-        logger.error(
-            f"Error searching for existing gdb item with title {title}", exc_info=True
-        )
+        logger.exception(f"Error searching for existing gdb item with title {title}")
 
         return []
 
@@ -260,8 +258,8 @@ def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
         result = retry(new_item.query, return_count_only=True)
 
         return result
-    except Exception as e:
-        logger.error(f"Failed to count features in AGOL service: {e}", exc_info=True)
+    except Exception:
+        logger.exception("Failed to count features in AGOL service")
         return -1
 
 
@@ -466,9 +464,7 @@ def update_feature_services(
                     summary.add_table_updated(table, item_id)
                 set_table_hash(table, current_hashes[table])
         except Exception as e:
-            logger.error(
-                f"Failed to update feature service for {table}: {e}", exc_info=True
-            )
+            logger.exception(f"Failed to update feature service for {table}")
             has_errors = True
             if summary:
                 summary.add_table_error(table, "update", str(e))
@@ -496,7 +492,7 @@ def _create_and_publish_service(
     try:
         # Create FGDB for this single table
         logger.info("Uploading FGDB")
-        fgdb_path, source_counts = create_fgdb([table], agol_items_lookup)
+        fgdb_path, _source_counts = create_fgdb([table], agol_items_lookup)
         single_item = zip_and_upload_fgdb(fgdb_path, gis_connection)
 
         # Publish the FGDB as a feature service
@@ -520,11 +516,8 @@ def _create_and_publish_service(
         single_item.delete(permanent=True)
 
         return item
-    except Exception as e:
-        logger.error(
-            f"Failed to create and publish service for table {table}: {e}",
-            exc_info=True,
-        )
+    except Exception:
+        logger.exception(f"Failed to create and publish service for table {table}")
 
         return None
 
@@ -573,10 +566,9 @@ def _configure_published_service(
             retry(item.protect)
 
         return True
-    except Exception as e:
-        logger.error(
-            f"Failed to configure published service {item.id} for table {table}: {e}",
-            exc_info=True,
+    except Exception:
+        logger.exception(
+            f"Failed to configure published service {item.id} for table {table}"
         )
 
         return False

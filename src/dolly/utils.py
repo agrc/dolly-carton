@@ -75,7 +75,7 @@ def retry(worker_method, *args, **kwargs):
 
                 return _inner_retry(worker_method, *args, **kwargs)
             else:
-                raise error
+                raise
 
     return _inner_retry(worker_method, *args, **kwargs)
 
@@ -200,7 +200,7 @@ def get_service_from_title(title):
     new_title = re.sub(r"\s+", " ", new_title).strip()
     new_title = new_title.replace(" ", "_")
 
-    logging.debug("updating %s to %s", title, new_title)
+    module_logger.debug("updating %s to %s", title, new_title)
 
     return new_title
 

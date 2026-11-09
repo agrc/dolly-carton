@@ -324,8 +324,8 @@ def _count_features_in_internal_table(
         cursor.close()
 
         return count
-    except Exception as e:
-        logger.error(f"Failed to count features in table {table}: {e}", exc_info=True)
+    except Exception:
+        logger.exception(f"Failed to count features in table {table}")
         return -1
     finally:
         if connection:
@@ -363,10 +363,8 @@ def _count_features_in_fgdb_layer(fgdb_path, layer_name: str) -> int:
         dataset = None
 
         return count
-    except Exception as e:
-        logger.error(
-            f"Failed to count features in FGDB layer {layer_name}: {e}", exc_info=True
-        )
+    except Exception:
+        logger.exception(f"Failed to count features in FGDB layer {layer_name}")
         return -1
 
 
@@ -431,8 +429,8 @@ def _copy_table_to_fgdb(
         logger.info(f"Successfully copied layer {table} to FGDB.")
 
         return True
-    except Exception as e:
-        logger.error(f"Failed to copy layer {table} to FGDB. Error: {e}", exc_info=True)
+    except Exception:
+        logger.exception(f"Failed to copy layer {table} to FGDB")
 
         return False
 
@@ -492,7 +490,7 @@ def create_fgdb(
                     logger.info(f"📊 FGDB layer {layer_name}: {fgdb_count:,} features")
 
         if not tables_copied:
-            raise Exception("FGDB creation failed for all tables.")
+            raise RuntimeError("FGDB creation failed for all tables.")
 
         db_connection = _get_database_connection()
         try:

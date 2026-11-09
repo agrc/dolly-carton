@@ -6,7 +6,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from importlib.metadata import PackageNotFoundError, version
 from textwrap import dedent
-from typing import List
 
 import humanize
 import requests
@@ -40,18 +39,18 @@ class ProcessSummary:
     """
 
     # Tables processed
-    tables_updated: List[str] = field(default_factory=list)
-    tables_published: List[str] = field(default_factory=list)
-    tables_with_errors: List[str] = field(default_factory=list)
+    tables_updated: list[str] = field(default_factory=list)
+    tables_published: list[str] = field(default_factory=list)
+    tables_with_errors: list[str] = field(default_factory=list)
 
     # AGOL item IDs for linking (parallel arrays to tables_updated/published)
-    updated_item_ids: List[str | None] = field(default_factory=list)
-    published_item_ids: List[str | None] = field(default_factory=list)
+    updated_item_ids: list[str | None] = field(default_factory=list)
+    published_item_ids: list[str | None] = field(default_factory=list)
 
     # Error details
-    update_errors: List[str] = field(default_factory=list)
-    publish_errors: List[str] = field(default_factory=list)
-    global_errors: List[str] = field(default_factory=list)
+    update_errors: list[str] = field(default_factory=list)
+    publish_errors: list[str] = field(default_factory=list)
+    global_errors: list[str] = field(default_factory=list)
 
     # Timing
     start_time: float = 0.0
@@ -194,14 +193,14 @@ class ProcessSummary:
             )
             host = response.text
             is_running_in_gcp = True
-        except Exception:
-            pass
+        except requests.RequestException as e:
+            logger.debug(f"Could not read GCP metadata: {e}")
 
         return host, is_running_in_gcp
 
     @staticmethod
     def _add_table_blocks(
-        message: Message, tables: List[str], item_ids: List[str | None]
+        message: Message, tables: list[str], item_ids: list[str | None]
     ) -> None:
         for table, item_id in zip(tables, item_ids):
             if item_id:
@@ -209,7 +208,7 @@ class ProcessSummary:
             else:
                 message.add(SectionBlock(text=f"• `{table}`"))
 
-    def build_slack_messages(self) -> List[Message]:
+    def build_slack_messages(self) -> list[Message]:
         total_tables = len(set(self.tables_updated + self.tables_published))
         if self.global_errors:
             status_emoji = "🔴"
@@ -362,7 +361,6 @@ def finish_summary(end_time: float) -> None:
     Args:
         end_time: Process end time (from time.time())
     """
-    global _current_summary
     if _current_summary is not None:
         _current_summary.end_time = end_time
         _current_summary.log_summary()
@@ -386,5 +384,5 @@ def finish_summary(end_time: float) -> None:
                     "No Slack webhook URL configured, skipping Slack notification"
                 )
 
-        except Exception as e:
+        except Exception as e:  # noqa: BLE001
             logger.warning(f"Failed to post summary to Slack: {e}")

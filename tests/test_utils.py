@@ -95,9 +95,7 @@ class TestIsGuid:
 
         for edge_case in edge_cases:
             # These should be invalid because UUID() is strict about format
-            assert is_guid(edge_case) is False, (
-                f"Expected {repr(edge_case)} to be invalid"
-            )
+            assert is_guid(edge_case) is False, f"Expected {edge_case!r} to be invalid"
 
     def test_special_characters(self):
         """Test strings with special characters."""
@@ -344,8 +342,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -354,14 +352,12 @@ class TestGetSecrets:
             mock_secrets_folder.exists.return_value = True
             mock_secrets_folder.__truediv__ = lambda self, other: (
                 mock_path_class.return_value
-                if other == "app"
-                else mock_path_class.return_value
             )
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -420,15 +416,11 @@ class TestGetSecrets:
         # Mock the Path(__file__).parent / "secrets" chain
         mock_file_path = mock_path_class.return_value
         mock_file_path.parent = mock_path_class.return_value
-        mock_file_path.parent.__truediv__ = (
-            lambda self, other: mock_local_folder
-            if other == "secrets"
-            else mock_path_class.return_value
+        mock_file_path.parent.__truediv__ = lambda self, other: (
+            mock_local_folder if other == "secrets" else mock_path_class.return_value
         )
-        mock_local_folder.__truediv__ = (
-            lambda self, other: mock_local_file
-            if other == "secrets.json"
-            else mock_path_class.return_value
+        mock_local_folder.__truediv__ = lambda self, other: (
+            mock_local_file if other == "secrets.json" else mock_path_class.return_value
         )
 
         def path_constructor(path_str):
@@ -475,13 +467,13 @@ class TestGetSecrets:
             # Mock the Path(__file__).parent / "secrets" chain
             mock_file_path = mock_path_class.return_value
             mock_file_path.parent = mock_path_class.return_value
-            mock_file_path.parent.__truediv__ = (
-                lambda self, other: mock_local_folder
+            mock_file_path.parent.__truediv__ = lambda self, other: (
+                mock_local_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
-            mock_local_folder.__truediv__ = (
-                lambda self, other: mock_local_file
+            mock_local_folder.__truediv__ = lambda self, other: (
+                mock_local_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
@@ -559,8 +551,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -570,19 +562,15 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
 
             # Override the secrets folder's truediv to return the app folder for "app"
             mock_secrets_folder.__truediv__ = lambda self, other: (
-                mock_app_folder
-                if other == "app"
-                else mock_path_class.return_value
-                if other == "secrets.json"
-                else mock_path_class.return_value
+                mock_app_folder if other == "app" else mock_path_class.return_value
             )
 
             # Configure cloud secrets file to exist and return empty JSON
@@ -633,8 +621,8 @@ class TestGetSecrets:
 
             # Configure the mock chain
             mock_file_path.parent = mock_parent
-            mock_parent.__truediv__ = (
-                lambda self, other: mock_secrets_folder
+            mock_parent.__truediv__ = lambda self, other: (
+                mock_secrets_folder
                 if other == "secrets"
                 else mock_path_class.return_value
             )
@@ -644,19 +632,15 @@ class TestGetSecrets:
 
             # Create a mock for the app folder and its operations
             mock_app_folder = mock_path_class.return_value
-            mock_app_folder.__truediv__ = (
-                lambda self, other: mock_cloud_secrets_file
+            mock_app_folder.__truediv__ = lambda self, other: (
+                mock_cloud_secrets_file
                 if other == "secrets.json"
                 else mock_path_class.return_value
             )
 
             # Override the secrets folder's truediv to return the app folder for "app"
             mock_secrets_folder.__truediv__ = lambda self, other: (
-                mock_app_folder
-                if other == "app"
-                else mock_path_class.return_value
-                if other == "secrets.json"
-                else mock_path_class.return_value
+                mock_app_folder if other == "app" else mock_path_class.return_value
             )
 
             # Configure cloud secrets file to exist and return nested JSON
@@ -707,7 +691,7 @@ class TestRetry:
             nonlocal call_count
             call_count += 1
             if call_count < 3:  # Fail first 2 times
-                raise Exception(f"Failure {call_count}")
+                raise RuntimeError(f"Failure {call_count}")
             return "success on attempt 3"
 
         with patch("dolly.utils.sleep"):  # Mock sleep to speed up test
@@ -722,11 +706,11 @@ class TestRetry:
         def always_failing_function():
             nonlocal call_count
             call_count += 1
-            raise Exception(f"Failure {call_count}")
+            raise RuntimeError(f"Failure {call_count}")
 
         with patch("dolly.utils.sleep"):  # Mock sleep to speed up test
             with pytest.raises(
-                Exception, match="Failure 4"
+                RuntimeError, match="Failure 4"
             ):  # RETRY_MAX_TRIES=3, so 4 total attempts
                 retry(always_failing_function)
             assert call_count == 4  # Initial try + 3 retries
@@ -738,12 +722,12 @@ class TestRetry:
         def always_failing_function():
             nonlocal call_count
             call_count += 1
-            raise Exception(f"Failure {call_count}")
+            raise RuntimeError(f"Failure {call_count}")
 
         # Patch the module-level constants
         with patch("dolly.utils.RETRY_MAX_TRIES", 1), patch("dolly.utils.sleep"):
             with pytest.raises(
-                Exception, match="Failure 2"
+                RuntimeError, match="Failure 2"
             ):  # 1 retry = 2 total attempts
                 retry(always_failing_function)
             assert call_count == 2
@@ -756,13 +740,13 @@ class TestRetry:
         def always_failing_function():
             nonlocal call_count
             call_count += 1
-            raise Exception(f"Failure {call_count}")
+            raise RuntimeError(f"Failure {call_count}")
 
         def mock_sleep(time):
             sleep_times.append(time)
 
         with patch("dolly.utils.sleep", side_effect=mock_sleep):
-            with pytest.raises(Exception):
+            with pytest.raises(RuntimeError):
                 retry(always_failing_function)
 
             # With RETRY_DELAY_TIME=2, should be 2^1=2, 2^2=4, 2^3=8
@@ -777,7 +761,7 @@ class TestRetry:
         def always_failing_function():
             nonlocal call_count
             call_count += 1
-            raise Exception(f"Failure {call_count}")
+            raise RuntimeError(f"Failure {call_count}")
 
         def mock_sleep(time):
             sleep_times.append(time)
@@ -787,7 +771,7 @@ class TestRetry:
             patch("dolly.utils.RETRY_DELAY_TIME", 3),
             patch("dolly.utils.sleep", side_effect=mock_sleep),
         ):
-            with pytest.raises(Exception):
+            with pytest.raises(RuntimeError):
                 retry(always_failing_function)
 
             # With RETRY_DELAY_TIME=3, should be 3^1=3, 3^2=9, 3^3=27
@@ -802,7 +786,7 @@ class TestRetry:
             nonlocal call_count
             call_count += 1
             if call_count < 2:  # Fail first time only
-                raise Exception("Network error")
+                raise RuntimeError("Network error")
             return "success"
 
         with (
@@ -826,9 +810,11 @@ class TestRetry:
         def function_with_specific_error():
             raise ValueError("Specific error message")
 
-        with patch("dolly.utils.sleep"):
-            with pytest.raises(ValueError, match="Specific error message"):
-                retry(function_with_specific_error)
+        with (
+            patch("dolly.utils.sleep"),
+            pytest.raises(ValueError, match="Specific error message"),
+        ):
+            retry(function_with_specific_error)
 
     def test_retry_with_no_arguments(self):
         """Test that retry works with functions that take no arguments."""
@@ -838,7 +824,7 @@ class TestRetry:
             nonlocal call_count
             call_count += 1
             if call_count < 2:
-                raise Exception("Fail once")
+                raise RuntimeError("Fail once")
             return 42
 
         with patch("dolly.utils.sleep"):
