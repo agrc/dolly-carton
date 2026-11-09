@@ -53,6 +53,7 @@ class TestFeatureCountIntegration:
     def test_summary_status_with_count_mismatches(self):
         """Test that feature count mismatches affect overall process status."""
         import json
+
         summary = ProcessSummary()
 
         # Add a successful table update

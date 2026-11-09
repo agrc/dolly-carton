@@ -2,7 +2,6 @@
 
 import logging
 import os
-from typing import Dict
 
 from google.cloud import firestore
 
@@ -12,7 +11,7 @@ COLLECTION = "dolly-carton"
 DOCUMENT = "state"
 
 
-def get_table_hashes() -> Dict[str, str]:
+def get_table_hashes() -> dict[str, str]:
     """Retrieve the stored table hash map from Firestore.
 
     Returns:

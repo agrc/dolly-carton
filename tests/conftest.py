@@ -23,7 +23,7 @@ def mock_slack_webhook(monkeypatch):
       this using their own patching within the test scope.
     """
     # Import within fixture to ensure module is loaded in test runtime
-    import dolly.summary as summary
+    from dolly import summary
 
     mock_response = MagicMock()
     mock_response.status_code = 200

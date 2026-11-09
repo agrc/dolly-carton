@@ -2,7 +2,6 @@ import logging
 import os
 import time
 from datetime import timedelta
-from typing import Optional
 
 import google.cloud.logging
 import humanize
@@ -68,7 +67,7 @@ def clean_up() -> None:
     logger.info("Cleaned up temporary files.")
 
 
-def _main_logic(cli_tables: Optional[str] = None) -> None:
+def _main_logic(cli_tables: str | None = None) -> None:
     """
     Core business logic for the Dolly Carton process.
 
@@ -165,9 +164,9 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
 
         current_summary = get_current_summary()
         if current_summary is not None:
-            error_message = f"{type(e).__name__}: {str(e)}"
+            error_message = f"{type(e).__name__}: {e!s}"
             current_summary.add_global_error(error_message)
-            logger.error(f"Global error occurred: {error_message}", exc_info=True)
+            logger.exception("Global error occurred: %s", type(e).__name__)
 
         # Re-raise the exception to maintain existing behavior
         raise
@@ -177,7 +176,7 @@ def _main_logic(cli_tables: Optional[str] = None) -> None:
 
 
 def main(
-    tables: Optional[str] = typer.Option(
+    tables: str | None = typer.Option(
         None,
         help="Comma-separated list of tables to process (e.g., sgid.society.cemeteries,sgid.boundaries.municipalities). If provided, overrides automatic change detection.",
     ),
