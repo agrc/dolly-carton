@@ -9,7 +9,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Install core utilities and Python 3.12
 # Ubuntu 24.04 comes with Python 3.12 by default, so we just need pip.
-RUN apt-get update && apt-get install -y --no-install-recommends python3-pip
+# The GDAL base image's Arrow source is unused here and may have a missing signing key.
+RUN grep -RIlF 'packages.apache.org/artifactory/arrow' /etc/apt/sources.list.d | xargs -r rm -f \
+    && apt-get update \
+    && apt-get install -y --no-install-recommends python3-pip
 
 # Download the Microsoft GPG key, de-armor it, and place it in trusted.gpg.d
 # Note: Using --insecure flag to handle self-signed certificates in CI environments
