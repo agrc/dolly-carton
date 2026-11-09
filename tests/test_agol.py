@@ -373,8 +373,8 @@ class TestSearchExistingItem:
         result = _search_existing_item(title, mock_gis)
 
         # Verify error logging
-        mock_logger.error.assert_called_once_with(
-            f"Error searching for existing gdb item with title {title}", exc_info=True
+        mock_logger.exception.assert_called_once_with(
+            f"Error searching for existing gdb item with title {title}"
         )
 
         # Should return empty list on exception
@@ -943,7 +943,9 @@ class TestUpdateFeatureServices:
         )
 
         # Should log the error
-        mock_logger.error.assert_called_once()
+        mock_logger.exception.assert_called_once_with(
+            f"Failed to update feature service for {tables[0]}"
+        )
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
 
@@ -1012,7 +1014,9 @@ class TestCreateAndPublishService:
         result = _create_and_publish_service(table, agol_items_lookup, mock_gis)
 
         assert result is None
-        mock_logger.error.assert_called_once()
+        mock_logger.exception.assert_called_once_with(
+            f"Failed to create and publish service for table {table}"
+        )
 
 
 class TestConfigurePublishedService:
@@ -1130,7 +1134,9 @@ class TestConfigurePublishedService:
         result = _configure_published_service(mock_item, table, agol_items_lookup)
 
         assert result is False
-        mock_logger.error.assert_called_once()
+        mock_logger.exception.assert_called_once_with(
+            f"Failed to configure published service {mock_item.id} for table {table}"
+        )
 
 
 class TestPublishNewFeatureServices:
@@ -1324,4 +1330,6 @@ class TestCountFeaturesInAgolService:
 
         # Assert
         assert result == -1
-        mock_logger.error.assert_called_once()
+        mock_logger.exception.assert_called_once_with(
+            "Failed to count features in AGOL service"
+        )
