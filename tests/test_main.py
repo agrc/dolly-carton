@@ -21,7 +21,7 @@ class TestMain:
             },
         }
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -38,7 +38,7 @@ class TestMain:
         mock_precisedelta,
         mock_time,
     ):
-        mock_time.side_effect = [1000.0, 1005.0]
+        mock_time.time.side_effect = [1000.0, 1005.0]
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {}
         mock_determine_updated.return_value = []
@@ -54,7 +54,7 @@ class TestMain:
         mock_logger.info.assert_any_call("Tables with changed hashes: []")
         mock_logger.info.assert_any_call("No updated tables found.")
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -81,7 +81,7 @@ class TestMain:
         mock_precisedelta,
         mock_time,
     ):
-        mock_time.side_effect = [1000.0, 1010.0]
+        mock_time.time.side_effect = [1000.0, 1010.0]
         mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {"sgid.society.cemeteries": "h0"}
         mock_get_current_hashes.return_value = {"sgid.society.cemeteries": "h1"}
@@ -101,7 +101,7 @@ class TestMain:
             "Updating existing feature services for tables: ['sgid.society.cemeteries']"
         )
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -124,7 +124,7 @@ class TestMain:
         mock_precisedelta,
         mock_time,
     ):
-        mock_time.side_effect = [1000.0, 1015.0]
+        mock_time.time.side_effect = [1000.0, 1015.0]
         mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {"sgid.transportation.roads": "h2"}
@@ -136,7 +136,7 @@ class TestMain:
 
         mock_publish_new_feature_services.assert_called_once()
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -165,7 +165,7 @@ class TestMain:
         mock_precisedelta,
         mock_time,
     ):
-        mock_time.side_effect = [1000.0, 1020.0]
+        mock_time.time.side_effect = [1000.0, 1020.0]
         mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {"sgid.society.cemeteries": "h0"}
         mock_get_current_hashes.return_value = {
@@ -189,7 +189,7 @@ class TestMain:
         mock_update_feature_services.assert_called_once()
         mock_publish_new_feature_services.assert_called_once()
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
     @patch("dolly.main.logger")
@@ -202,23 +202,22 @@ class TestMain:
     ):
         from dolly.summary import get_current_summary
 
-        mock_time.side_effect = [1000.0, 1005.0]
+        mock_time.time.side_effect = [1000.0, 1005.0]
         mock_get_table_hashes.side_effect = Exception("Database error")
 
         with pytest.raises(Exception, match="Database error"):
             _main_logic()
 
         mock_clean_up.assert_called_once()
-        mock_logger.error.assert_called_once()
-        assert any(
-            "Global error occurred" in c[0][0] for c in mock_logger.error.call_args_list
+        mock_logger.exception.assert_called_once_with(
+            "Global error occurred: %s", "Exception"
         )
         # Ensure summary captured error if created
         summary = get_current_summary()
         if summary:
             assert any("Database error" in e for e in summary.global_errors)
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.get_table_hashes")
     @patch("dolly.main.clean_up")
     @patch("dolly.summary.get_current_summary")
@@ -233,7 +232,7 @@ class TestMain:
     ):
         from dolly.summary import ProcessSummary
 
-        mock_time.side_effect = [1000.0, 1005.0]
+        mock_time.time.side_effect = [1000.0, 1005.0]
         mock_get_table_hashes.side_effect = ValueError("Invalid configuration")
         test_summary = ProcessSummary()
         mock_get_current_summary.return_value = test_summary
@@ -244,7 +243,7 @@ class TestMain:
         assert len(test_summary.global_errors) == 1
         assert "ValueError: Invalid configuration" in test_summary.global_errors[0]
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -265,7 +264,7 @@ class TestMain:
         mock_precisedelta,
         mock_time,
     ):
-        mock_time.side_effect = [1000.0, 1005.0]
+        mock_time.time.side_effect = [1000.0, 1005.0]
         mock_get_gis_connection.return_value = Mock()
         mock_get_table_hashes.return_value = {}
         mock_get_current_hashes.return_value = {"sgid.unknown.table": "h1"}
@@ -279,7 +278,7 @@ class TestMain:
             "skipping sgid.unknown.table since it does not show up in the agol items lookup"
         )
 
-    @patch("dolly.main.time.time")
+    @patch("dolly.main.time")
     @patch("dolly.main.humanize.precisedelta")
     @patch("dolly.main.get_current_hashes")
     @patch("dolly.main.determine_updated_tables")
@@ -319,7 +318,7 @@ class TestMain:
             "sgid.society.cemeteries": "h1",
             "sgid.transportation.roads": "h2",
         }
-        mock_time.side_effect = [1000.0, 1020.0]
+        mock_time.time.side_effect = [1000.0, 1020.0]
         mock_precisedelta.return_value = "20 seconds"
 
         _main_logic(cli_tables="sgid.society.cemeteries,sgid.transportation.roads")

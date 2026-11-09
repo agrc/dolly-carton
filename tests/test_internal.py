@@ -555,8 +555,7 @@ class TestCopyTableToFgdb:
 
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_failed_table_copy(self, mock_logger, mock_translate, mock_prepare_options):
+    def test_failed_table_copy(self, mock_translate, mock_prepare_options, caplog):
         """Test failed table copy to FGDB."""
         # Setup mocks
         mock_gdal_connection = Mock()
@@ -580,10 +579,11 @@ class TestCopyTableToFgdb:
         )
 
         assert result is False
-        mock_logger.error.assert_called_once()
-        error_call_args = mock_logger.error.call_args[0][0]
-        assert "Failed to copy layer" in error_call_args
-        assert "GDAL translation failed" in error_call_args
+        assert len(caplog.records) == 1
+        assert caplog.records[0].levelname == "ERROR"
+        assert caplog.records[0].getMessage() == f"Failed to copy layer {table} to FGDB"
+        assert caplog.records[0].exc_info is not None
+        assert "GDAL translation failed" in caplog.text
 
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
