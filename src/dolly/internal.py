@@ -1,12 +1,14 @@
 import json
 import logging
 import os
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from textwrap import dedent
 from typing import cast
+from zoneinfo import ZoneInfo
 
 import pyodbc
-from osgeo import gdal
+from osgeo import gdal, ogr
 
 from dolly.domains import (
     apply_domains_to_fields,
@@ -43,6 +45,7 @@ CONNECTION_STRING = (
 )
 
 DEV_MOCKS_PATH = Path(__file__).parent / "dev_mocks.json"
+SOURCE_TIME_ZONE = ZoneInfo("America/Denver")
 
 
 def _get_database_connection() -> pyodbc.Connection:
@@ -426,6 +429,15 @@ def _copy_table_to_fgdb(
             destNameOrDestDS=str(output_path), srcDS=gdal_connection, **gdal_options
         )
 
+        layer_name = get_service_from_title(agol_item_info["published_name"])
+        datetime_field_names = _get_datetime_field_names(
+            gdal_connection, gdal_options["layers"][0]
+        )
+        if datetime_field_names:
+            _convert_fgdb_datetime_fields_to_utc(
+                output_path, layer_name, datetime_field_names
+            )
+
         logger.info(f"Successfully copied layer {table} to FGDB.")
 
         return True
@@ -435,10 +447,83 @@ def _copy_table_to_fgdb(
         return False
 
 
+def _get_datetime_field_names(
+    gdal_connection: gdal.Dataset, layer_name: str
+) -> set[str]:
+    layer = gdal_connection.GetLayerByName(layer_name)
+    definition = layer.GetLayerDefn()
+    return {
+        definition.GetFieldDefn(index).GetNameRef()
+        for index in range(definition.GetFieldCount())
+        if definition.GetFieldDefn(index).GetType() == ogr.OFTDateTime
+    }
+
+
+def _convert_fgdb_datetime_fields_to_utc(
+    fgdb_path: Path, layer_name: str, datetime_field_names: set[str]
+) -> None:
+    """Convert source timestamp fields in an FGDB layer from Mountain time to UTC."""
+    dataset = gdal.OpenEx(str(fgdb_path), gdal.OF_VECTOR | gdal.OF_UPDATE)
+    layer = dataset.GetLayerByName(layer_name)
+    if layer is None:
+        raise ValueError(f"Layer {layer_name} not found in FGDB {fgdb_path}")
+
+    datetime_field_names = {name.casefold() for name in datetime_field_names}
+    datetime_fields = [
+        index
+        for index in range(layer.GetLayerDefn().GetFieldCount())
+        if layer.GetLayerDefn().GetFieldDefn(index).GetType() == ogr.OFTDateTime
+        and layer.GetLayerDefn().GetFieldDefn(index).GetNameRef().casefold()
+        in datetime_field_names
+    ]
+    if not datetime_fields:
+        return
+
+    if not layer.TestCapability(ogr.OLCRandomWrite):
+        raise RuntimeError(f"FGDB layer {layer_name} does not support feature updates")
+
+    for feature in layer:
+        changed = False
+        for index in datetime_fields:
+            if not feature.IsFieldSetAndNotNull(index):
+                continue
+
+            year, month, day, hour, minute, seconds, _ = feature.GetFieldAsDateTime(
+                index
+            )
+            local_datetime = datetime(year, month, day, hour, minute) + timedelta(
+                seconds=seconds
+            )
+            utc_datetime = local_datetime.replace(tzinfo=SOURCE_TIME_ZONE).astimezone(
+                timezone.utc
+            )
+            feature.SetField(
+                index,
+                utc_datetime.year,
+                utc_datetime.month,
+                utc_datetime.day,
+                utc_datetime.hour,
+                utc_datetime.minute,
+                utc_datetime.second + utc_datetime.microsecond / 1_000_000,
+                ogr.TZFLAG_UTC,
+            )
+            changed = True
+
+        if changed and layer.SetFeature(feature) != ogr.OGRERR_NONE:
+            raise RuntimeError(
+                f"Failed to convert timestamp fields for feature {feature.GetFID()} "
+                f"in FGDB layer {layer_name}"
+            )
+
+    dataset = None
+
+
 def create_fgdb(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
     gdal_connection: gdal.Dataset | None = None,
+    *,
+    output_path: Path | None = None,
 ) -> tuple[Path, dict[str, int]]:
     """
     Create a File Geodatabase (FGDB) from the specified tables.
@@ -448,6 +533,7 @@ def create_fgdb(
         agol_items_lookup: Lookup dictionary with AGOL item information
         gdal_connection: GDAL database connection (optional, will create new if not provided).
                         Primarily used for testing to inject mock connections.
+        output_path: Optional FGDB destination, for isolated migration exports.
 
     Returns:
         Tuple of (Path to the created FGDB, dictionary mapping table names to source feature counts)
@@ -464,10 +550,13 @@ def create_fgdb(
         if len(tables) == 0:
             raise ValueError("No tables provided to create FGDB.")
 
-        output_gdb_path = _generate_output_path(tables, agol_items_lookup)
+        output_gdb_path = (
+            output_path
+            if output_path is not None
+            else _generate_output_path(tables, agol_items_lookup)
+        )
 
         # Copy tables first to create the FGDB structure
-        tables_copied = False
         source_counts = {}
         for table in tables:
             # Count features in source table before copying
@@ -479,18 +568,15 @@ def create_fgdb(
             success = _copy_table_to_fgdb(
                 internal, table, output_gdb_path, agol_items_lookup[table]
             )
-            if success:
-                tables_copied = True
+            if not success:
+                raise RuntimeError(f"Failed to copy table {table} to FGDB")
 
-                # Count features in the created FGDB layer
-                title = agol_items_lookup[table]["published_name"]
-                layer_name = get_service_from_title(title)
-                fgdb_count = _count_features_in_fgdb_layer(output_gdb_path, layer_name)
-                if fgdb_count >= 0:
-                    logger.info(f"📊 FGDB layer {layer_name}: {fgdb_count:,} features")
-
-        if not tables_copied:
-            raise RuntimeError("FGDB creation failed for all tables.")
+            # Count features in the created FGDB layer
+            title = agol_items_lookup[table]["published_name"]
+            layer_name = get_service_from_title(title)
+            fgdb_count = _count_features_in_fgdb_layer(output_gdb_path, layer_name)
+            if fgdb_count >= 0:
+                logger.info(f"📊 FGDB layer {layer_name}: {fgdb_count:,} features")
 
         db_connection = _get_database_connection()
         try:

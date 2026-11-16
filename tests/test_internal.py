@@ -271,6 +271,9 @@ class TestGetAgolItemsLookup:
 class TestCreateFgdb:
     """Test cases for the create_fgdb function."""
 
+    @pytest.mark.parametrize("output_path", [None, Path("/test/migration.gdb")])
+    @patch("dolly.internal._get_datetime_field_names", return_value=set())
+    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
     @patch("dolly.internal._count_features_in_fgdb_layer")
     @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.get_table_field_domains")
@@ -293,6 +296,9 @@ class TestCreateFgdb:
         mock_get_table_field_domains,
         mock_count_internal,
         mock_count_fgdb,
+        mock_convert_datetime_fields,
+        mock_datetime_field_names,
+        output_path,
     ):
         """Test successful FGDB creation with provided GDAL connection."""
         # Setup mocks
@@ -323,13 +329,24 @@ class TestCreateFgdb:
             }
         }
 
-        result = create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
+        result = create_fgdb(
+            tables,
+            agol_lookup,
+            gdal_connection=mock_gdal_connection,
+            output_path=output_path,
+        )
 
-        assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})
+        expected_path = output_path or Path("/test/output.gdb")
+        assert result == (expected_path, {"sgid.test.table1": 1000})
+        assert mock_translate.call_args.kwargs["destNameOrDestDS"] == str(expected_path)
+        if output_path is not None:
+            mock_generate_path.assert_not_called()
         mock_gdal_connection.GetLayerCount.assert_called_once()
         mock_translate.assert_called_once()
         mock_logger.info.assert_called()
 
+    @patch("dolly.internal._get_datetime_field_names", return_value=set())
+    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
     @patch("dolly.internal._count_features_in_fgdb_layer")
     @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.get_table_field_domains")
@@ -352,6 +369,8 @@ class TestCreateFgdb:
         mock_get_table_field_domains,
         mock_count_internal,
         mock_count_fgdb,
+        mock_convert_datetime_fields,
+        mock_datetime_field_names,
     ):
         """Test that function creates GDAL connection when none provided."""
         # Setup mocks
@@ -440,7 +459,9 @@ class TestCreateFgdb:
             },
         }
 
-        with pytest.raises(Exception, match="FGDB creation failed for all tables"):
+        with pytest.raises(
+            RuntimeError, match="Failed to copy table sgid.test.table1 to FGDB"
+        ):
             create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
 
 
@@ -513,11 +534,31 @@ class TestPrepareGdalOptions:
 class TestCopyTableToFgdb:
     """Test cases for the _copy_table_to_fgdb function."""
 
+    def test_source_field_detection_excludes_date_only_and_time_only(self):
+        from osgeo import ogr
+
+        from dolly.internal import _get_datetime_field_names
+
+        dataset = ogr.GetDriverByName("Memory").CreateDataSource("")
+        layer = dataset.CreateLayer("source", geom_type=ogr.wkbNone)
+        layer.CreateField(ogr.FieldDefn("timestamp", ogr.OFTDateTime))
+        layer.CreateField(ogr.FieldDefn("calendar_date", ogr.OFTDate))
+        layer.CreateField(ogr.FieldDefn("clock_time", ogr.OFTTime))
+
+        assert _get_datetime_field_names(dataset, "source") == {"timestamp"}
+
+    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
+    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
     @patch("dolly.internal.logger")
     def test_successful_table_copy(
-        self, mock_logger, mock_translate, mock_prepare_options
+        self,
+        mock_logger,
+        mock_translate,
+        mock_prepare_options,
+        mock_convert_datetime,
+        mock_datetime_field_names,
     ):
         """Test successful table copy to FGDB."""
         # Setup mocks
@@ -551,11 +592,23 @@ class TestCopyTableToFgdb:
             options=["-nln", "test_service", "-nlt", "MULTIPOLYGON"],
             accessMode="append",
         )
+        mock_convert_datetime.assert_called_once_with(
+            output_path, "test_table", {"created"}
+        )
         mock_logger.info.assert_called()
 
+    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
+    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
-    def test_failed_table_copy(self, mock_translate, mock_prepare_options, caplog):
+    def test_failed_table_copy(
+        self,
+        mock_translate,
+        mock_prepare_options,
+        mock_convert_datetime,
+        mock_datetime_field_names,
+        caplog,
+    ):
         """Test failed table copy to FGDB."""
         # Setup mocks
         mock_gdal_connection = Mock()
@@ -579,17 +632,25 @@ class TestCopyTableToFgdb:
         )
 
         assert result is False
+        mock_convert_datetime.assert_not_called()
         assert len(caplog.records) == 1
         assert caplog.records[0].levelname == "ERROR"
         assert caplog.records[0].getMessage() == f"Failed to copy layer {table} to FGDB"
         assert caplog.records[0].exc_info is not None
         assert "GDAL translation failed" in caplog.text
 
+    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
+    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
     @patch("dolly.internal._prepare_gdal_options")
     @patch("dolly.internal.gdal.VectorTranslate")
     @patch("dolly.internal.logger")
     def test_logs_correct_messages(
-        self, mock_logger, mock_translate, mock_prepare_options
+        self,
+        mock_logger,
+        mock_translate,
+        mock_prepare_options,
+        mock_convert_datetime,
+        mock_datetime_field_names,
     ):
         """Test that correct log messages are generated."""
         # Setup mocks
@@ -615,6 +676,70 @@ class TestCopyTableToFgdb:
             "Successfully copied layer sgid.test.table1 to FGDB" in msg
             for msg in info_calls
         )
+
+    def test_converts_local_timestamps_and_preserves_date_fields(self, tmp_path):
+        from osgeo import gdal, ogr
+
+        from dolly.internal import _convert_fgdb_datetime_fields_to_utc
+
+        fgdb_path = tmp_path / "timestamps.gdb"
+        driver = ogr.GetDriverByName("OpenFileGDB")
+        dataset = driver.CreateDataSource(str(fgdb_path))
+        layer = dataset.CreateLayer("timestamps", geom_type=ogr.wkbNone)
+        layer.CreateField(ogr.FieldDefn("timestamp", ogr.OFTDateTime))
+        layer.CreateField(ogr.FieldDefn("calendar_date", ogr.OFTDate))
+
+        summer_feature = ogr.Feature(layer.GetLayerDefn())
+        summer_feature.SetField("timestamp", 2025, 9, 3, 0, 0, 0, ogr.TZFLAG_UNKNOWN)
+        summer_feature.SetField("calendar_date", 2025, 9, 3, 0, 0, 0, 0)
+        layer.CreateFeature(summer_feature)
+
+        winter_feature = ogr.Feature(layer.GetLayerDefn())
+        winter_feature.SetField("timestamp", 2025, 1, 3, 0, 0, 0, ogr.TZFLAG_UNKNOWN)
+        winter_feature.SetField("calendar_date", 2025, 1, 3, 0, 0, 0, 0)
+        layer.CreateFeature(winter_feature)
+
+        null_feature = ogr.Feature(layer.GetLayerDefn())
+        null_feature.SetFieldNull("timestamp")
+        null_feature.SetField("calendar_date", 2025, 1, 3, 0, 0, 0, 0)
+        layer.CreateFeature(null_feature)
+        layer = None
+        dataset = None
+
+        _convert_fgdb_datetime_fields_to_utc(fgdb_path, "timestamps", {"timestamp"})
+
+        dataset = gdal.OpenEx(str(fgdb_path), gdal.OF_VECTOR)
+        layer = dataset.GetLayerByName("timestamps")
+        features = list(layer)
+
+        assert features[0].GetFieldAsDateTime("timestamp") == [
+            2025,
+            9,
+            3,
+            6,
+            0,
+            0.0,
+            ogr.TZFLAG_UTC,
+        ]
+        assert features[1].GetFieldAsDateTime("timestamp") == [
+            2025,
+            1,
+            3,
+            7,
+            0,
+            0.0,
+            ogr.TZFLAG_UTC,
+        ]
+        assert features[2].IsFieldNull("timestamp")
+        assert features[0].GetFieldAsDateTime("calendar_date")[:6] == [
+            2025,
+            9,
+            3,
+            0,
+            0,
+            0.0,
+        ]
+        dataset = None
 
 
 class TestBuildUpdateAgolItemQuery:

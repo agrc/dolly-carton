@@ -9,6 +9,7 @@ from dolly.internal import create_fgdb
 class TestDomainProcessing:
     """Test domain processing logic in create_fgdb."""
 
+    @patch("dolly.internal._get_datetime_field_names", return_value=set())
     @patch("dolly.internal._count_features_in_fgdb_layer")
     @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.apply_domains_to_fields")
@@ -37,6 +38,7 @@ class TestDomainProcessing:
         mock_apply_domains,
         mock_count_internal,
         mock_count_fgdb,
+        mock_datetime_fields,
     ):
         """Test create_fgdb with domain processing."""
         # Setup mocks
@@ -94,6 +96,7 @@ class TestDomainProcessing:
         )
         mock_apply_domains.assert_called_once()
 
+    @patch("dolly.internal._get_datetime_field_names", return_value=set())
     @patch("dolly.internal._count_features_in_fgdb_layer")
     @patch("dolly.internal._count_features_in_internal_table")
     @patch("dolly.internal.apply_domains_to_fields")
@@ -122,6 +125,7 @@ class TestDomainProcessing:
         mock_apply_domains,
         mock_count_internal,
         mock_count_fgdb,
+        mock_datetime_fields,
     ):
         """Test create_fgdb when no domains are found."""
         # Setup mocks

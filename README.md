@@ -74,6 +74,33 @@ APP_ENVIRONMENT=prod dolly --tables sgid.environment.deqmap_lust,sgid.environmen
 
 ## Development
 
+### One-time timezone migration
+
+After deploying the UTC timestamp conversion, run the separate migration script
+inside the dev container with production configuration:
+
+```bash
+# Read-only inventory: shows metadata-only services and datasets needing a refresh
+APP_ENVIRONMENT=prod python -m scripts.migrate_preferred_time_reference --dry-run
+
+# Apply the migration
+APP_ENVIRONMENT=prod python -m scripts.migrate_preferred_time_reference
+```
+
+The script sets the preferred Mountain time reference on every existing
+Dolly-managed service in `SGID.META.AGOLItems`. Datasets with source datetime
+fields are force-refreshed from internal through Dolly's UTC export and
+truncate/append pipeline, regardless of their stored hashes. Date-only fields
+do not trigger a refresh. Successful updates persist the current source hash.
+Local exports use isolated temporary directories.
+
+Failures are logged per service, other services are attempted, and the script
+exits with an error if any migration failed. Rerunning is safe because timestamp
+values are re-exported from internal rather than shifted in place in AGOL.
+The live migration replaces hosted data; do not run it concurrently with Dolly.
+It requires production secrets and Firestore access. Metadata is applied after
+the required data refresh succeeds.
+
 Development environment is pre-configured with VS Code dev containers.
 
 ```bash
