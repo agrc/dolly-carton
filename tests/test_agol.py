@@ -1,5 +1,6 @@
+import zipfile
 from pathlib import Path
-from unittest.mock import Mock, patch
+from unittest.mock import ANY, Mock, patch
 
 import pytest
 
@@ -215,72 +216,38 @@ class TestGenerateServiceTitle:
 class TestCreateZipFromFgdb:
     """Test cases for the _create_zip_from_fgdb function."""
 
-    @patch("dolly.agol.make_archive")
     @patch("dolly.agol.logger")
-    def test_creates_zip_file_successfully(self, mock_logger, mock_make_archive):
-        """Test successful zip file creation from FGDB."""
-        fgdb_path = Path("/test/output/society_cemeteries.gdb")
+    def test_creates_zip_file_and_excludes_arcpy_locks(self, mock_logger, tmp_path):
+        fgdb_path = tmp_path / "society_cemeteries.gdb"
+        nested_directory = fgdb_path / "feature_dataset"
+        nested_directory.mkdir(parents=True)
+        (nested_directory / "features.gdbtable").write_text("data")
+        (nested_directory / "features.gdbtable.lock").write_text("lock")
 
         result = _create_zip_from_fgdb(fgdb_path)
 
-        # Verify make_archive was called with correct parameters
-        mock_make_archive.assert_called_once_with(
-            "/test/output/society_cemeteries",
-            "zip",
-            root_dir=Path("/test/output"),
-            base_dir="society_cemeteries.gdb",
-        )
-
-        # Verify return value
-        expected_zip_path = Path("/test/output/society_cemeteries.zip")
+        expected_zip_path = fgdb_path.with_suffix(".zip")
         assert result == expected_zip_path
+        assert zipfile.is_zipfile(result)
+        with zipfile.ZipFile(result) as zip_file:
+            assert zip_file.namelist() == [
+                "society_cemeteries.gdb/feature_dataset/features.gdbtable"
+            ]
 
-        # Verify logging
         mock_logger.info.assert_called_once_with(f"FGDB zipped to {expected_zip_path}")
 
-    @patch("dolly.agol.make_archive")
     @patch("dolly.agol.logger")
-    def test_different_fgdb_paths(self, mock_logger, mock_make_archive):
-        """Test zip creation with different FGDB paths."""
-        test_cases = [
-            Path("/data/upload.gdb"),
-            Path("/tmp/boundaries_counties.gdb"),
-            Path("/output/geoscience_geology_detailed.gdb"),
-        ]
-
-        for fgdb_path in test_cases:
-            mock_make_archive.reset_mock()
-            mock_logger.reset_mock()
-
-            result = _create_zip_from_fgdb(fgdb_path)
-
-            expected_zip_path = fgdb_path.with_suffix(".zip")
-            assert result == expected_zip_path
-
-            mock_make_archive.assert_called_once_with(
-                str(fgdb_path.with_suffix("")),
-                "zip",
-                root_dir=fgdb_path.parent,
-                base_dir=fgdb_path.name,
-            )
-
-    @patch("dolly.agol.make_archive")
-    @patch("dolly.agol.logger")
-    def test_handles_path_with_spaces(self, mock_logger, mock_make_archive):
-        """Test zip creation with FGDB path containing spaces."""
-        fgdb_path = Path("/test/output/utah roads network.gdb")
+    def test_handles_path_with_spaces(self, mock_logger, tmp_path):
+        fgdb_path = tmp_path / "utah roads network.gdb"
+        fgdb_path.mkdir()
+        (fgdb_path / "roads.gdbtable").write_text("data")
 
         result = _create_zip_from_fgdb(fgdb_path)
 
-        expected_zip_path = Path("/test/output/utah roads network.zip")
+        expected_zip_path = fgdb_path.with_suffix(".zip")
         assert result == expected_zip_path
-
-        mock_make_archive.assert_called_once_with(
-            "/test/output/utah roads network",
-            "zip",
-            root_dir=Path("/test/output"),
-            base_dir="utah roads network.gdb",
-        )
+        with zipfile.ZipFile(result) as zip_file:
+            assert zip_file.namelist() == ["utah roads network.gdb/roads.gdbtable"]
 
 
 class TestGetGisConnection:
@@ -1381,7 +1348,9 @@ class TestCountFeaturesInAgolService:
         # Assert
         assert result == 123
         mock_table_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        mock_retry.assert_called_once_with(
+            mock_layer.query, return_count_only=True, where=ANY
+        )
 
     @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.retry")
@@ -1411,7 +1380,9 @@ class TestCountFeaturesInAgolService:
         # Assert
         assert result == 456
         mock_fl_cls.fromitem.assert_called_once_with(mock_item_instance)
-        mock_retry.assert_called_once_with(mock_layer.query, return_count_only=True)
+        mock_retry.assert_called_once_with(
+            mock_layer.query, return_count_only=True, where=ANY
+        )
 
     @patch("dolly.agol.get_gis_connection")
     @patch("dolly.agol.logger")

@@ -30,9 +30,15 @@ def mock_slack_webhook(monkeypatch):
     mock_response.text = "ok"
 
     mock_post = MagicMock(return_value=mock_response)
+    mock_get = MagicMock(
+        side_effect=summary.requests.RequestException(
+            "GCP metadata is unavailable during tests"
+        )
+    )
 
     # Patch the requests.post used inside the summary module only
     monkeypatch.setattr(summary.requests, "post", mock_post)
+    monkeypatch.setattr(summary.requests, "get", mock_get)
 
     # Yield to allow tests to run with the patched function
     yield

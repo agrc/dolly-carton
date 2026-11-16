@@ -53,30 +53,3 @@ jobs:
           github-app-key: ${{ secrets.UGRC_RELEASE_BOT_APP_KEY }}
           github-app-name: ${{ secrets.UGRC_RELEASE_BOT_NAME }}
           github-app-email: ${{ secrets.UGRC_RELEASE_BOT_EMAIL }}
-
-  deploy-dev:
-    name: Deploy Dev
-    runs-on: ubuntu-latest
-    if: github.ref_name == 'dev'
-    environment:
-      name: dev
-    permissions:
-      id-token: write
-      contents: read
-
-    steps:
-      - name: ⬇️ Set up code
-        uses: actions/checkout@v6
-
-      - name: 🚀 Deploy
-        uses: ./.github/actions/deploy
-        timeout-minutes: 15
-        with:
-          project_id: ${{ secrets.PROJECT_ID }}
-          identity_provider: ${{ secrets.IDENTITY_PROVIDER }}
-          service_account_email: ${{ secrets.SERVICE_ACCOUNT_EMAIL }}
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          shared_vpc_network: ${{ vars.UGRC_SHARED_VPC_NETWORK_DEV }}
-          shared_vpc_subnet: ${{ vars.UGRC_SHARED_VPC_SUBNET_WEST_DEV }}
-          env_vars: |-
-            APP_ENVIRONMENT=staging

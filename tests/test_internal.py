@@ -1,5 +1,6 @@
 """Tests for internal.py functions"""
 
+import sys
 from pathlib import Path
 from textwrap import dedent
 from unittest.mock import Mock, patch
@@ -19,6 +20,14 @@ from dolly.internal import (
     get_current_hashes,
     update_agol_item,
 )
+
+
+def _mock_arcpy(monkeypatch):
+    arcpy = Mock()
+    arcpy.Exists.return_value = True
+    arcpy.ListFields.return_value = []
+    monkeypatch.setitem(sys.modules, "arcpy", arcpy)
+    return arcpy
 
 
 class TestGenerateOutputPath:
@@ -78,6 +87,19 @@ class TestGenerateOutputPath:
             result = _generate_output_path(tables, agol_lookup)
 
         assert result == Path("/test/upload.gdb")
+
+    def test_multiple_tables_with_batch_index_uses_indexed_path(self):
+        """Test that multiple tables with a batch_index produce a unique indexed FGDB name."""
+        tables = ["sgid.society.cemeteries", "sgid.transportation.roads"]
+        agol_lookup = {
+            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
+            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+        }
+
+        with patch("dolly.internal.OUTPUT_PATH", Path("/test/output")):
+            result = _generate_output_path(tables, agol_lookup, batch_index=3)
+
+        assert result == Path("/test/output/upload_3.gdb")
 
 
 class TestGetGeometryOption:
@@ -272,55 +294,37 @@ class TestCreateFgdb:
     """Test cases for the create_fgdb function."""
 
     @pytest.mark.parametrize("output_path", [None, Path("/test/migration.gdb")])
-    @patch("dolly.internal._get_datetime_field_names", return_value=set())
-    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
-    @patch("dolly.internal._count_features_in_fgdb_layer")
-    @patch("dolly.internal._count_features_in_internal_table")
-    @patch("dolly.internal.get_table_field_domains")
-    @patch("dolly.internal._get_database_connection")
-    @patch("dolly.internal._generate_output_path")
-    @patch("dolly.internal.get_gdal_layer_name")
-    @patch("dolly.internal._get_geometry_option")
-    @patch("dolly.internal.get_service_from_title")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_successful_fgdb_creation(
-        self,
-        mock_logger,
-        mock_translate,
-        mock_get_service,
-        mock_get_geom_option,
-        mock_get_layer_name,
-        mock_generate_path,
-        mock_get_db_connection,
-        mock_get_table_field_domains,
-        mock_count_internal,
-        mock_count_fgdb,
-        mock_convert_datetime_fields,
-        mock_datetime_field_names,
-        output_path,
-    ):
-        """Test successful FGDB creation with provided GDAL connection."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_gdal_connection.GetLayerCount.return_value = 5
+    def test_successful_fgdb_creation(self, monkeypatch, output_path):
+        internal = Path("/test/internal.sde")
+        generated_path = Path("/test/output.gdb")
+        mock_internal_connection = Mock(return_value=internal)
+        mock_copy_table = Mock(return_value=True)
+        mock_generate_path = Mock(return_value=generated_path)
+        mock_count_internal = Mock(return_value=1000)
+        mock_count_fgdb = Mock(return_value=1000)
+        mock_database_connection = Mock()
 
-        mock_db_connection = Mock()
-        mock_get_db_connection.return_value = mock_db_connection
-
-        # Mock field domains function to return empty dict
-        mock_get_table_field_domains.return_value = {}
-
-        # Mock feature counting functions
-        mock_count_internal.return_value = 1000
-        mock_count_fgdb.return_value = 1000
-
-        mock_generate_path.return_value = Path("/test/output.gdb")
-        mock_get_layer_name.return_value = "test_layer"
-        mock_get_geom_option.return_value = "MULTIPOLYGON"
-        mock_get_service.return_value = "test_service"
-        mock_translate.return_value = None  # VectorTranslate returns None on success
-
+        monkeypatch.setattr(
+            "dolly.internal._get_internal_connection", mock_internal_connection
+        )
+        monkeypatch.setattr("dolly.internal._copy_table_to_fgdb", mock_copy_table)
+        monkeypatch.setattr("dolly.internal._generate_output_path", mock_generate_path)
+        monkeypatch.setattr(
+            "dolly.internal._count_features_in_internal_table", mock_count_internal
+        )
+        monkeypatch.setattr(
+            "dolly.internal._count_features_in_fgdb_layer", mock_count_fgdb
+        )
+        monkeypatch.setattr(
+            "dolly.internal.get_table_field_domains", Mock(return_value={})
+        )
+        monkeypatch.setattr(
+            "dolly.internal._get_database_connection",
+            Mock(return_value=mock_database_connection),
+        )
+        monkeypatch.setattr(
+            "dolly.internal.get_service_from_title", Mock(return_value="test_table")
+        )
         tables = ["sgid.test.table1"]
         agol_lookup = {
             "sgid.test.table1": {
@@ -329,124 +333,46 @@ class TestCreateFgdb:
             }
         }
 
-        result = create_fgdb(
-            tables,
-            agol_lookup,
-            gdal_connection=mock_gdal_connection,
-            output_path=output_path,
-        )
+        result = create_fgdb(tables, agol_lookup, output_path=output_path)
 
-        expected_path = output_path or Path("/test/output.gdb")
+        expected_path = output_path or generated_path
         assert result == (expected_path, {"sgid.test.table1": 1000})
-        assert mock_translate.call_args.kwargs["destNameOrDestDS"] == str(expected_path)
+        mock_internal_connection.assert_called_once()
+        mock_copy_table.assert_called_once_with(
+            internal, "sgid.test.table1", expected_path, agol_lookup["sgid.test.table1"]
+        )
+        mock_count_internal.assert_called_once_with("sgid.test.table1")
+        mock_count_fgdb.assert_called_once_with(expected_path, "test_table")
+        mock_database_connection.close.assert_called_once()
         if output_path is not None:
             mock_generate_path.assert_not_called()
-        mock_gdal_connection.GetLayerCount.assert_called_once()
-        mock_translate.assert_called_once()
-        mock_logger.info.assert_called()
+        else:
+            mock_generate_path.assert_called_once_with(tables, agol_lookup, None)
 
-    @patch("dolly.internal._get_datetime_field_names", return_value=set())
-    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
-    @patch("dolly.internal._count_features_in_fgdb_layer")
-    @patch("dolly.internal._count_features_in_internal_table")
-    @patch("dolly.internal.get_table_field_domains")
-    @patch("dolly.internal._get_database_connection")
-    @patch("dolly.internal._get_gdal_connection")
-    @patch("dolly.internal._generate_output_path")
-    @patch("dolly.internal.get_gdal_layer_name")
-    @patch("dolly.internal._get_geometry_option")
-    @patch("dolly.internal.get_service_from_title")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    def test_creates_gdal_connection_when_none_provided(
-        self,
-        mock_translate,
-        mock_get_service,
-        mock_get_geom_option,
-        mock_get_layer_name,
-        mock_generate_path,
-        mock_get_gdal_connection,
-        mock_get_db_connection,
-        mock_get_table_field_domains,
-        mock_count_internal,
-        mock_count_fgdb,
-        mock_convert_datetime_fields,
-        mock_datetime_field_names,
-    ):
-        """Test that function creates GDAL connection when none provided."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_gdal_connection.GetLayerCount.return_value = 5
-        mock_get_gdal_connection.return_value = mock_gdal_connection
-
-        mock_db_connection = Mock()
-        mock_get_db_connection.return_value = mock_db_connection
-
-        # Mock field domains function to return empty dict
-        mock_get_table_field_domains.return_value = {}
-
-        # Mock feature counting functions
-        mock_count_internal.return_value = 1000
-        mock_count_fgdb.return_value = 1000
-
-        mock_generate_path.return_value = Path("/test/output.gdb")
-        mock_get_layer_name.return_value = "test_layer"
-        mock_get_geom_option.return_value = "MULTIPOLYGON"
-        mock_get_service.return_value = "test_service"
-        mock_translate.return_value = None
-
-        tables = ["sgid.test.table1"]
-        agol_lookup = {
-            "sgid.test.table1": {
-                "geometry_type": "POLYGON",
-                "published_name": "Test Table",
-            }
-        }
-
-        result = create_fgdb(tables, agol_lookup)
-
-        assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})
-        mock_get_gdal_connection.assert_called_once()
-        mock_gdal_connection.GetLayerCount.assert_called_once()
-        mock_translate.assert_called_once()
-
-    def test_raises_error_for_empty_tables_list(self):
+    def test_raises_error_for_empty_tables_list(self, monkeypatch):
         """Test that function raises ValueError for empty tables list."""
-        mock_gdal_connection = Mock()
+        mock_internal_connection = Mock()
+        monkeypatch.setattr(
+            "dolly.internal._get_internal_connection", mock_internal_connection
+        )
 
         with pytest.raises(ValueError, match="No tables provided to create FGDB"):
-            create_fgdb([], {}, gdal_connection=mock_gdal_connection)
+            create_fgdb([], {})
 
-    @patch("dolly.internal._count_features_in_internal_table")
-    @patch("dolly.internal._generate_output_path")
-    @patch("dolly.internal.get_gdal_layer_name")
-    @patch("dolly.internal._get_geometry_option")
-    @patch("dolly.internal.get_service_from_title")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_raises_error_when_all_tables_fail(
-        self,
-        mock_logger,
-        mock_translate,
-        mock_get_service,
-        mock_get_geom_option,
-        mock_get_layer_name,
-        mock_generate_path,
-        mock_count_internal,
-    ):
+        mock_internal_connection.assert_not_called()
+
+    def test_raises_error_when_table_copy_fails(self, monkeypatch):
         """Test that function raises exception when all tables fail to copy."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_gdal_connection.GetLayerCount.return_value = 5
-
-        # Mock feature counting functions
-        mock_count_internal.return_value = 1000
-
-        mock_generate_path.return_value = Path("/test/output.gdb")
-        mock_get_layer_name.return_value = "test_layer"
-        mock_get_geom_option.return_value = "MULTIPOLYGON"
-        mock_get_service.return_value = "test_service"
-        mock_translate.side_effect = Exception("Copy failed")
-
+        monkeypatch.setattr(
+            "dolly.internal._get_internal_connection",
+            Mock(return_value=Path("/test/internal.sde")),
+        )
+        monkeypatch.setattr(
+            "dolly.internal._count_features_in_internal_table", Mock(return_value=1000)
+        )
+        monkeypatch.setattr(
+            "dolly.internal._copy_table_to_fgdb", Mock(return_value=False)
+        )
         tables = ["sgid.test.table1", "sgid.test.table2"]
         agol_lookup = {
             "sgid.test.table1": {
@@ -462,7 +388,68 @@ class TestCreateFgdb:
         with pytest.raises(
             RuntimeError, match="Failed to copy table sgid.test.table1 to FGDB"
         ):
-            create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
+            create_fgdb(tables, agol_lookup)
+
+    def test_copy_projects_with_esri_transform_and_converts_dates(self, monkeypatch):
+        arcpy = _mock_arcpy(monkeypatch)
+        arcpy.Exists.return_value = False
+        date_field = Mock()
+        date_field.name = "updated"
+        date_field.type = "Date"
+        arcpy.ListFields.return_value = [date_field]
+        convert_dates = Mock()
+        monkeypatch.setattr(
+            "dolly.internal._convert_fgdb_datetime_fields_to_utc", convert_dates
+        )
+        monkeypatch.setattr(
+            "dolly.internal.get_service_from_title", Mock(return_value="test_layer")
+        )
+
+        result = _copy_table_to_fgdb(
+            Path("/test/internal.sde"),
+            "sgid.test.table1",
+            Path("/test/output.gdb"),
+            {"geometry_type": "POLYGON", "published_name": "Test Table"},
+        )
+
+        assert result is True
+        arcpy.management.CreateFileGDB.assert_called_once_with(
+            out_folder_path="/test", out_name="output.gdb"
+        )
+        project_call = arcpy.management.Project.call_args
+        assert project_call.args == (
+            "/test/internal.sde/sgid.test.table1",
+            "/test/output.gdb/test_layer",
+        )
+        assert (
+            project_call.kwargs["out_coor_system"]
+            == arcpy.SpatialReference.return_value
+        )
+        assert project_call.kwargs["transform_method"] == "NAD_1983_To_WGS_1984_5"
+        convert_dates.assert_called_once_with(
+            Path("/test/output.gdb"), "test_layer", {"updated"}
+        )
+
+    def test_copy_uses_table_to_table_for_standalone_tables(self, monkeypatch):
+        arcpy = _mock_arcpy(monkeypatch)
+        monkeypatch.setattr(
+            "dolly.internal.get_service_from_title", Mock(return_value="test_table")
+        )
+
+        result = _copy_table_to_fgdb(
+            Path("/test/internal.sde"),
+            "sgid.test.table1",
+            Path("/test/output.gdb"),
+            {"geometry_type": "STAND ALONE", "published_name": "Test Table"},
+        )
+
+        assert result is True
+        arcpy.conversion.TableToTable.assert_called_once_with(
+            "/test/internal.sde/sgid.test.table1",
+            "/test/output.gdb",
+            "test_table",
+        )
+        arcpy.management.Project.assert_not_called()
 
 
 class TestPrepareGdalOptions:
@@ -546,136 +533,6 @@ class TestCopyTableToFgdb:
         layer.CreateField(ogr.FieldDefn("clock_time", ogr.OFTTime))
 
         assert _get_datetime_field_names(dataset, "source") == {"timestamp"}
-
-    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
-    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
-    @patch("dolly.internal._prepare_gdal_options")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_successful_table_copy(
-        self,
-        mock_logger,
-        mock_translate,
-        mock_prepare_options,
-        mock_convert_datetime,
-        mock_datetime_field_names,
-    ):
-        """Test successful table copy to FGDB."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_prepare_options.return_value = {
-            "layers": ["test_layer"],
-            "format": "OpenFileGDB",
-            "options": ["-nln", "test_service", "-nlt", "MULTIPOLYGON"],
-            "accessMode": "append",
-        }
-        mock_translate.return_value = None
-
-        table = "sgid.test.table1"
-        output_path = Path("/test/output.gdb")
-        agol_item_info = {
-            "geometry_type": "POLYGON",
-            "published_name": "Test Table",
-        }
-
-        result = _copy_table_to_fgdb(
-            mock_gdal_connection, table, output_path, agol_item_info
-        )
-
-        assert result is True
-        mock_prepare_options.assert_called_once_with(table, agol_item_info)
-        mock_translate.assert_called_once_with(
-            destNameOrDestDS=str(output_path),
-            srcDS=mock_gdal_connection,
-            layers=["test_layer"],
-            format="OpenFileGDB",
-            options=["-nln", "test_service", "-nlt", "MULTIPOLYGON"],
-            accessMode="append",
-        )
-        mock_convert_datetime.assert_called_once_with(
-            output_path, "test_table", {"created"}
-        )
-        mock_logger.info.assert_called()
-
-    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
-    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
-    @patch("dolly.internal._prepare_gdal_options")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    def test_failed_table_copy(
-        self,
-        mock_translate,
-        mock_prepare_options,
-        mock_convert_datetime,
-        mock_datetime_field_names,
-        caplog,
-    ):
-        """Test failed table copy to FGDB."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_prepare_options.return_value = {
-            "layers": ["test_layer"],
-            "format": "OpenFileGDB",
-            "options": ["-nln", "test_service", "-nlt", "MULTIPOLYGON"],
-            "accessMode": "append",
-        }
-        mock_translate.side_effect = Exception("GDAL translation failed")
-
-        table = "sgid.test.table1"
-        output_path = Path("/test/output.gdb")
-        agol_item_info = {
-            "geometry_type": "POLYGON",
-            "published_name": "Test Table",
-        }
-
-        result = _copy_table_to_fgdb(
-            mock_gdal_connection, table, output_path, agol_item_info
-        )
-
-        assert result is False
-        mock_convert_datetime.assert_not_called()
-        assert len(caplog.records) == 1
-        assert caplog.records[0].levelname == "ERROR"
-        assert caplog.records[0].getMessage() == f"Failed to copy layer {table} to FGDB"
-        assert caplog.records[0].exc_info is not None
-        assert "GDAL translation failed" in caplog.text
-
-    @patch("dolly.internal._get_datetime_field_names", return_value={"created"})
-    @patch("dolly.internal._convert_fgdb_datetime_fields_to_utc")
-    @patch("dolly.internal._prepare_gdal_options")
-    @patch("dolly.internal.gdal.VectorTranslate")
-    @patch("dolly.internal.logger")
-    def test_logs_correct_messages(
-        self,
-        mock_logger,
-        mock_translate,
-        mock_prepare_options,
-        mock_convert_datetime,
-        mock_datetime_field_names,
-    ):
-        """Test that correct log messages are generated."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_prepare_options.return_value = {"layers": ["test_layer"]}
-        mock_translate.return_value = None
-
-        table = "sgid.test.table1"
-        output_path = Path("/test/output.gdb")
-        agol_item_info = {
-            "geometry_type": "POLYGON",
-            "published_name": "Test Table",
-        }
-
-        _copy_table_to_fgdb(mock_gdal_connection, table, output_path, agol_item_info)
-
-        # Check log messages
-        info_calls = [call[0][0] for call in mock_logger.info.call_args_list]
-        assert any(
-            "Copying layer sgid.test.table1 to FGDB" in msg for msg in info_calls
-        )
-        assert any(
-            "Successfully copied layer sgid.test.table1 to FGDB" in msg
-            for msg in info_calls
-        )
 
     def test_converts_local_timestamps_and_preserves_date_fields(self, tmp_path):
         from osgeo import gdal, ogr

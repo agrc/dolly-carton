@@ -71,8 +71,35 @@ def _get_gdal_connection() -> gdal.Dataset:
         return gdal.OpenEx(f"MSSQL:{CONNECTION_STRING}", gdal.OF_VECTOR)
 
 
+def _get_internal_connection() -> Path:
+    """
+    Factory function to create an .sde connection file for ArcPy.
+
+    Returns:
+        Path: Path to the .sde connection file
+    """
+    import arcpy
+
+    sde_path = OUTPUT_PATH / "internal.sde"
+    if not sde_path.exists():
+        arcpy.management.CreateDatabaseConnection(
+            out_folder_path=str(OUTPUT_PATH),
+            out_name="internal.sde",
+            database_platform="SQL_SERVER",
+            instance=host,
+            account_authentication="DATABASE_AUTH",
+            username=username,
+            password=password,
+            database=database,
+        )
+
+    return sde_path
+
+
 def _generate_output_path(
-    tables: list[str], agol_items_lookup: dict[str, dict]
+    tables: list[str],
+    agol_items_lookup: dict[str, dict],
+    batch_index: int | None = None,
 ) -> Path:
     """
     Generate the output FGDB path based on the tables and lookup data.
@@ -80,6 +107,8 @@ def _generate_output_path(
     Args:
         tables: List of table names
         agol_items_lookup: Lookup dictionary for AGOL items
+        batch_index: Optional batch number (1-based) used to produce unique FGDB names
+                     when processing multiple batches of tables.
 
     Returns:
         Path object for the output FGDB
@@ -89,6 +118,9 @@ def _generate_output_path(
         category = tables[0].split(".")[1].lower()
 
         return OUTPUT_PATH / f"{category}_{get_service_from_title(first_title)}.gdb"
+
+    if batch_index is not None:
+        return OUTPUT_PATH / f"upload_{batch_index}.gdb"
 
     return FGDB_PATH
 
@@ -403,16 +435,16 @@ def _prepare_gdal_options(table: str, agol_item_info: dict) -> dict:
 
 
 def _copy_table_to_fgdb(
-    gdal_connection: gdal.Dataset,
+    internal: Path,
     table: str,
     output_path: Path,
     agol_item_info: dict,
 ) -> bool:
     """
-    Copy a single table to FGDB using GDAL operations.
+    Copy a single table to FGDB using ArcPy.
 
     Args:
-        gdal_connection: GDAL database connection
+        internal: Path to the internal SQL Server connection file
         table: Table name to copy
         output_path: Path to the output FGDB
         agol_item_info: AGOL item information dictionary
@@ -423,16 +455,41 @@ def _copy_table_to_fgdb(
     logger.info(f"Copying layer {table} to FGDB.")
 
     try:
-        gdal_options = _prepare_gdal_options(table, agol_item_info)
+        import arcpy
 
-        gdal.VectorTranslate(
-            destNameOrDestDS=str(output_path), srcDS=gdal_connection, **gdal_options
-        )
+        datetime_field_names = {
+            field.name
+            for field in arcpy.ListFields(str(internal / table))
+            if field.type == "Date"
+        }
+
+        if not arcpy.Exists(str(output_path)):
+            logger.debug(f"Creating FGDB at {output_path}")
+            arcpy.management.CreateFileGDB(
+                out_folder_path=str(output_path.parent),
+                out_name=output_path.name,
+            )
+
+        if agol_item_info["geometry_type"].upper() == "STAND ALONE":
+            logger.debug(f"Using arcpy to copy table {table} to FGDB at {output_path}")
+            arcpy.conversion.TableToTable(
+                str(internal / table),
+                str(output_path),
+                get_service_from_title(agol_item_info["published_name"]),
+            )
+        else:
+            logger.debug(f"Using arcpy to project {table} to FGDB at {output_path}")
+            arcpy.management.Project(
+                str(internal / table),
+                str(
+                    output_path
+                    / get_service_from_title(agol_item_info["published_name"])
+                ),
+                out_coor_system=arcpy.SpatialReference(3857),
+                transform_method="NAD_1983_To_WGS_1984_5",
+            )
 
         layer_name = get_service_from_title(agol_item_info["published_name"])
-        datetime_field_names = _get_datetime_field_names(
-            gdal_connection, gdal_options["layers"][0]
-        )
         if datetime_field_names:
             _convert_fgdb_datetime_fields_to_utc(
                 output_path, layer_name, datetime_field_names
@@ -521,8 +578,8 @@ def _convert_fgdb_datetime_fields_to_utc(
 def create_fgdb(
     tables: list[str],
     agol_items_lookup: dict[str, dict],
-    gdal_connection: gdal.Dataset | None = None,
     *,
+    batch_index: int | None = None,
     output_path: Path | None = None,
 ) -> tuple[Path, dict[str, int]]:
     """
@@ -531,29 +588,22 @@ def create_fgdb(
     Args:
         tables: List of table names to include in the FGDB
         agol_items_lookup: Lookup dictionary with AGOL item information
-        gdal_connection: GDAL database connection (optional, will create new if not provided).
-                        Primarily used for testing to inject mock connections.
         output_path: Optional FGDB destination, for isolated migration exports.
+        batch_index: Optional batch number (1-based) forwarded to _generate_output_path to
+                     produce unique FGDB names when processing multiple batches.
 
     Returns:
         Tuple of (Path to the created FGDB, dictionary mapping table names to source feature counts)
     """
-    # Use provided connection or create a new one
-    if gdal_connection is None:
-        internal = _get_gdal_connection()
-    else:
-        internal = gdal_connection
+    if len(tables) == 0:
+        raise ValueError("No tables provided to create FGDB.")
 
+    internal = _get_internal_connection()
     try:
-        logger.debug(f"Total layers found in internal: {internal.GetLayerCount()}")
-
-        if len(tables) == 0:
-            raise ValueError("No tables provided to create FGDB.")
-
         output_gdb_path = (
             output_path
             if output_path is not None
-            else _generate_output_path(tables, agol_items_lookup)
+            else _generate_output_path(tables, agol_items_lookup, batch_index)
         )
 
         # Copy tables first to create the FGDB structure
@@ -631,5 +681,4 @@ def create_fgdb(
 
         return output_gdb_path, source_counts
     finally:
-        if internal is not None:
-            internal = None
+        internal = None

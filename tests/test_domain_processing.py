@@ -39,12 +39,18 @@ class TestDomainProcessing:
         mock_count_internal,
         mock_count_fgdb,
         mock_datetime_fields,
+        monkeypatch,
     ):
         """Test create_fgdb with domain processing."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_gdal_connection.GetLayerCount.return_value = 5
+        monkeypatch.setattr(
+            "dolly.internal._get_internal_connection",
+            Mock(return_value=Path("/test/internal.sde")),
+        )
+        monkeypatch.setattr(
+            "dolly.internal._copy_table_to_fgdb", Mock(return_value=True)
+        )
 
+        # Setup mocks
         mock_db_connection = Mock()
         mock_get_db_connection.return_value = mock_db_connection
 
@@ -77,7 +83,7 @@ class TestDomainProcessing:
             }
         }
 
-        result = create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
+        result = create_fgdb(tables, agol_lookup)
 
         # Verify result
         assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})
@@ -126,12 +132,18 @@ class TestDomainProcessing:
         mock_count_internal,
         mock_count_fgdb,
         mock_datetime_fields,
+        monkeypatch,
     ):
         """Test create_fgdb when no domains are found."""
-        # Setup mocks
-        mock_gdal_connection = Mock()
-        mock_gdal_connection.GetLayerCount.return_value = 5
+        monkeypatch.setattr(
+            "dolly.internal._get_internal_connection",
+            Mock(return_value=Path("/test/internal.sde")),
+        )
+        monkeypatch.setattr(
+            "dolly.internal._copy_table_to_fgdb", Mock(return_value=True)
+        )
 
+        # Setup mocks
         mock_db_connection = Mock()
         mock_get_db_connection.return_value = mock_db_connection
 
@@ -156,7 +168,7 @@ class TestDomainProcessing:
             }
         }
 
-        result = create_fgdb(tables, agol_lookup, gdal_connection=mock_gdal_connection)
+        result = create_fgdb(tables, agol_lookup)
 
         # Verify result
         assert result == (Path("/test/output.gdb"), {"sgid.test.table1": 1000})

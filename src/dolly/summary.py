@@ -24,6 +24,11 @@ DOLLY_QUOTES = [
     "There's no failure, only quitting.",
     "Do the best you can, with what you have, where you are.",
     "Find out who you are and do it on purpose.",
+    "I never tried quitting, and I never quit trying.",
+    "If you don't like the road you're walking, start paving another one.",
+    "Storms make trees take deeper roots.",
+    "We cannot direct the wind, but we can adjust the sails.",
+    "You'll never do a whole lot unless you're brave enough to try.",
 ]
 RANDOM_QUOTE = random.choice(DOLLY_QUOTES)
 

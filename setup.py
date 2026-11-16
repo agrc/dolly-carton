@@ -42,6 +42,7 @@ setup(
         "google-cloud-logging==3.*",
         "humanize==4.*",
         "pyodbc==5.*",
+        "python-dotenv==1.*",
         "requests==2.*",
         "ugrc-supervisor==3.*",
         "typer==0.*",

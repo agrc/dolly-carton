@@ -1,7 +1,8 @@
 import logging
 import os
+import zipfile
+from datetime import datetime
 from pathlib import Path
-from shutil import make_archive
 from typing import cast
 
 from arcgis.features import FeatureLayer, FeatureLayerCollection, Table
@@ -103,13 +104,17 @@ def _create_zip_from_fgdb(fgdb_path: Path) -> Path:
     Returns:
         Path to the created zip file
     """
-    make_archive(
-        str(fgdb_path.with_suffix("")),
-        "zip",
-        root_dir=fgdb_path.parent,
-        base_dir=fgdb_path.name,
-    )
     zip_path = fgdb_path.with_suffix(".zip")
+    with zipfile.ZipFile(zip_path, "w", zipfile.ZIP_DEFLATED) as zip_file:
+        for root, dirs, files in os.walk(fgdb_path):
+            for file in files:
+                # skip any .lock files created by arcpy
+                if file.endswith(".lock"):
+                    continue
+                file_path = Path(root) / file
+                rel_path = str(file_path.relative_to(fgdb_path.parent))
+                zip_file.write(str(file_path), rel_path)
+
     logger.info(f"FGDB zipped to {zip_path}")
 
     return zip_path
@@ -259,7 +264,13 @@ def _count_features_in_agol_service(service_item: FeatureLayer | Table) -> int:
                 Item(get_gis_connection(), service_item.properties["serviceItemId"])
             )
 
-        result = retry(new_item.query, return_count_only=True)
+        # Use an integer millisecond timestamp to avoid decimal literals in the SQL where clause
+        timestamp_ms = int(datetime.now().timestamp() * 1000)
+        result = retry(
+            new_item.query,
+            return_count_only=True,
+            where=f"{timestamp_ms}={timestamp_ms}",
+        )
 
         return result
     except Exception:

@@ -4,12 +4,14 @@
 
 Automated pipeline for syncing SGID data in internal to ArcGIS Online
 
-This is a GCP Cloud Run job that is kicked off from the [AGOL Forklift pallet](https://github.com/agrc/warehouse/blob/main/sgid/~AGOLPallet.py).
+Production currently runs from the [AGOL Forklift pallet](https://github.com/agrc/warehouse/blob/main/sgid/~AGOLPallet.py) on a Windows server. Dolly uses ArcPy there to project internal data to Web Mercator with Esri's `NAD_1983_To_WGS_1984_5` transformation before uploading it to AGOL.
+
+The ArcPy/Forklift implementation is a temporary workaround for the coordinate-transformation issue documented in [issue #43](https://github.com/agrc/dolly-carton/issues/43). The long-term plan is to replace this workaround and return Dolly to a GCP Cloud Run task once a suitable transformation is validated.
 
 ## What it does
 
 1. Determines which tables have changed by comparing per-table hashes from `SGID.Meta.ChangeDetection` with previously stored hashes in Firestore (staging/prod) or dev mocks (dev)
-2. Creates a single file geodatabase containing only the changed tables for service updates and a separate one for each newly published service
+2. Creates file geodatabases containing only the changed tables for service updates (in batches of 20) and a separate one for each newly published service
 3. Publishes new feature services or updates existing ones in ArcGIS Online
 4. Persists the new table hashes only after a successful publish/update so failed tables are retried on the next run
 
@@ -18,15 +20,18 @@ This is a GCP Cloud Run job that is kicked off from the [AGOL Forklift pallet](h
 Change detection is done at the table level using the `hash` column in `SGID.Meta.ChangeDetection`.
 
 Production:
+
 - A Firestore document maintains a map of table names to their last successfully published hash.
 - Current hashes are queried; any mismatch (or missing entry) marks the table for processing.
 - After a table finishes successfully its hash is written back; failed tables are left untouched and will be retried next run.
 
 Dev / Staging:
+
 - The file `src/dolly/dev_mocks.json` contains an `updated_tables` list that simulates which tables have “changed”. Deterministic fake hashes (e.g. `dev-hash-0`) are generated for testing logic.
 - The firestore document is updated with fake hashes. In dev this happens in the firestore emulator.
 
 CLI override:
+
 - You can bypass automatic change detection with `--tables` to force specific tables to process. Their current hashes are then stored (staging/prod) after success.
 
 Firestore structure (staging/prod):
@@ -44,6 +49,12 @@ Collection: dolly-carton
 This enables reliable retry semantics: only fully successful tables advance their stored hash.
 
 ## Setup
+
+The dev container supports development and CI but does not include ArcPy. ArcPy-dependent projection and FGDB operations require the Windows ArcGIS runtime and are verified on the Forklift host, not in CI. Cloud Run deployment is deferred until Dolly no longer requires ArcPy.
+
+`pip install -e .[tests]`
+`npm i -g firebase-tools`
+`firebase emulators:start --only firestore --project demo-test`
 
 Open project in VS Code and select "Reopen in Container"
 
@@ -77,7 +88,7 @@ APP_ENVIRONMENT=prod dolly --tables sgid.environment.deqmap_lust,sgid.environmen
 ### One-time timezone migration
 
 After deploying the UTC timestamp conversion, run the separate migration script
-inside the dev container with production configuration:
+on the Windows ArcGIS host with production configuration:
 
 ```bash
 # Read-only inventory: shows metadata-only services and datasets needing a refresh
@@ -125,5 +136,5 @@ Use scripts/post_slack_summary_test_messages.py to post a set of Slack messages 
 `APP_ENVIRONMENT` is an indicator of what environment the code is running in. This is set in the Dockerfile or Github Actions.
 
 - `dev`: Development environment (local)
-- `staging`: Staging environment (GCP)
-- `prod`: Production environment (GCP)
+- `staging`: Staging environment
+- `prod`: Production environment, currently run by Forklift on the Windows ArcGIS host
