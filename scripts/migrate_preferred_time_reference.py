@@ -91,11 +91,10 @@ def migrate_existing_services(dry_run: bool = False) -> None:
 
                 set_preferred_time_reference(item)
                 logger.info("Migrated service %s", item_id)
-            except Exception as error:
+            except Exception:
                 logger.exception(
-                    "Failed to migrate service %s: %s",
+                    "Failed to migrate service %s",
                     item_id,
-                    error,
                 )
                 failures.append(item_id)
     finally:
