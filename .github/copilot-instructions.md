@@ -4,7 +4,7 @@
 
 ## Project Overview
 
-Dolly Carton is a Python CLI application that automatically syncs SGID (Statewide Geographic Information Database) geospatial data from the internal SGID database to ArcGIS Online. It runs as a GCP Cloud Run job triggered by the [AGOL Forklift pallet](https://github.com/agrc/warehouse/blob/main/sgid/~AGOLPallet.py) and serves as an automated data pipeline for publishing Utah's authoritative geographic data.
+Dolly Carton is a Python CLI application that automatically syncs SGID (Statewide Geographic Information Database) geospatial data from the internal SGID database to ArcGIS Online. Production currently runs from the [AGOL Forklift pallet](https://github.com/agrc/warehouse/blob/main/sgid/~AGOLPallet.py) on a Windows ArcGIS host. ArcPy is used there as a temporary workaround for the coordinate-transformation issue documented in [issue #43](https://github.com/agrc/dolly-carton/issues/43). The long-term plan is to validate a replacement transformation and return Dolly to a GCP Cloud Run task.
 
 ### What the Application Does
 1. **Change Detection**: Compares table hashes from `SGID.Meta.ChangeDetection` with stored hashes in Firestore (prod/staging) or dev mocks
@@ -19,7 +19,8 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - **GDAL 3.11.3** - Geospatial data processing (CRITICAL: Only available via Docker)
   - **Important**: `gdal.UseExceptions()` is enabled, so GDAL functions raise exceptions instead of returning None on errors
   - No need to check GDAL results for None values - exceptions will be raised automatically
-- **Docker** - Required for GDAL support and consistent deployment
+- **ArcPy** - Provided by the Windows ArcGIS runtime for production FGDB creation and projection; not installed in Docker or CI
+- **Docker** - Required for the GDAL development and test environment
 - **ArcGIS Python API** - ArcGIS Online integration
 - **Google Cloud Firestore** - State management for prod/staging
 - **Firebase Emulator** - Local Firestore development
@@ -29,14 +30,16 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - `arcgis==2.*` - ArcGIS Online API client
 - `google-cloud-firestore==2.*` - Firestore integration
 - `pyodbc==5.*` - SQL Server database connectivity
+- ArcPy - Windows ArcGIS runtime dependency; do not add it to the Docker or CI environment
 - `typer==0.*` - CLI framework
 - `osgeo` (GDAL Python bindings) - Geospatial data manipulation
 - `pytest==8.*`, `ruff==0.*` - Testing and code quality
 
-### Development Environment Requirements
-- **Docker is ABSOLUTELY REQUIRED** - Application cannot run without Docker due to GDAL dependency
+### Development and Runtime Requirements
+- **Docker is REQUIRED for development and CI** because the GDAL Python bindings are only available in the configured image
+- **Production ArcPy operations require the Windows ArcGIS runtime**; the dev container and CI do not run ArcPy
 - VS Code with Remote-Containers extension for optimal development experience
-- The application WILL NOT work with direct Python installation
+- Keep ArcPy imports inside ArcPy-specific functions so non-ArcPy modules and tests can load in Docker
 
 ## Project Structure
 ```
@@ -110,6 +113,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
   - These modules have no GDAL dependency
   - All other test modules REQUIRE Docker to run
 - **CI/CD Testing**: Pull requests trigger full Docker-based test suite with linting via GitHub Actions
+- ArcPy is not run in CI. Validate actual ArcPy projection and FGDB operations on the supported Windows/ArcGIS host before production use.
 
 #### Slack notifications in tests
 - Tests may indirectly call `dolly.summary.finish_summary()` (for example, via `_main_logic()` in `dolly.main`), which posts the process summary to Slack if a webhook URL is configured.
@@ -146,7 +150,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 
 ### Key Modules
 - **main.py**: CLI orchestration with Typer, process timing, error handling
-- **internal.py**: SQL Server connectivity, GDAL operations, domain handling
+- **internal.py**: SQL Server connectivity, ArcPy FGDB creation/projection, GDAL datetime conversion, and domain handling
 - **agol.py**: ArcGIS Online publishing, feature service management
 - **state.py**: Firestore state management with environment-specific logic
 - **summary.py**: Process reporting with Slack integration and GCP logs links
@@ -190,7 +194,8 @@ dolly-cleanup-dev-agol
   - `dev_container`: Adds Node.js 22, Firebase tools, Zsh with Oh My Zsh
   - `test`: Copies code and installs test dependencies
   - `prod`: Production runtime image
-- **GCP Deployment**: Cloud Run job with shared VPC networking
+- **Current production runtime**: Forklift on a Windows ArcGIS host; ArcPy applies `NAD_1983_To_WGS_1984_5` before uploading data
+- **Cloud Run deployment**: Deferred until the ArcPy workaround is replaced with a validated transformation; do not deploy the ArcPy-dependent production path to Cloud Run
 - **Memory requirements**: Recent commits show memory bumps for large data processing
 
 ### Development Environment Details
@@ -290,4 +295,4 @@ This ensures the instructions remain current and helpful for all future developm
 4. **Format & lint**: `ruff format .` && `ruff check .`
 5. **Test locally**: Run test suite for validation `pytest -v`
 6. **Commit with conventional commit message**
-7. **CI handles**: Full Docker build, test suite, and deployment
+7. **CI handles**: Docker build, lint, and tests; production ArcPy behavior is validated on Windows and deployment is handled by Forklift
