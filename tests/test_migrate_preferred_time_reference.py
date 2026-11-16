@@ -22,10 +22,7 @@ def dependencies(monkeypatch):
     mocks = {name: Mock() for name in names}
     for name, mock in mocks.items():
         monkeypatch.setattr(migration, name, mock)
-    source_context = Mock()
-    source_context.__enter__ = Mock(return_value=Mock())
-    source_context.__exit__ = Mock(return_value=False)
-    mocks["_get_gdal_connection"].return_value = source_context
+    mocks["_get_gdal_connection"].return_value = Mock(spec=["GetLayerByName", "Close"])
     mocks["_get_datetime_field_names"].return_value = set()
     mocks["get_current_hashes"].return_value = {}
     mocks["create_fgdb"].side_effect = lambda tables, lookup, *, output_path: (
@@ -49,6 +46,7 @@ def test_migration_updates_unique_existing_service_ids(dependencies):
     gis.content.get.assert_called_once_with("service-1")
     dependencies["set_preferred_time_reference"].assert_called_once_with(item)
     dependencies["create_fgdb"].assert_not_called()
+    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
 
 
 def test_migration_force_refreshes_only_timestamp_tables(dependencies):
@@ -96,6 +94,7 @@ def test_migration_reports_failures_after_attempting_all_services(dependencies):
 
     assert gis.content.get.call_count == 2
     dependencies["set_preferred_time_reference"].assert_called_once()
+    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
 
 
 @pytest.mark.parametrize("missing_hash", [True, False])
@@ -116,6 +115,7 @@ def test_migration_reports_missing_hash_or_failed_data_refresh(
         migration.migrate_existing_services()
 
     dependencies["set_preferred_time_reference"].assert_not_called()
+    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
     if missing_hash:
         dependencies["create_fgdb"].assert_not_called()
     else:
@@ -139,4 +139,20 @@ def test_migration_dry_run_lists_refreshes_without_writes(dependencies, caplog):
     dependencies["get_current_hashes"].assert_not_called()
     dependencies["create_fgdb"].assert_not_called()
     dependencies["update_feature_services"].assert_not_called()
+    dependencies["set_preferred_time_reference"].assert_not_called()
+    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+
+
+def test_migration_closes_source_when_schema_inspection_fails(dependencies):
+    dependencies["get_agol_items_lookup"].return_value = {
+        "sgid.transportation.roads": {"item_id": "service-1"},
+    }
+    dependencies["_get_datetime_field_names"].side_effect = RuntimeError(
+        "Cannot read schema"
+    )
+
+    with pytest.raises(RuntimeError, match="service-1"):
+        migration.migrate_existing_services(dry_run=True)
+
+    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
     dependencies["set_preferred_time_reference"].assert_not_called()

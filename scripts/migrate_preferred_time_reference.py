@@ -38,7 +38,8 @@ def migrate_existing_services(dry_run: bool = False) -> None:
     gis_connection = None if dry_run else get_gis_connection()
     current_hashes = {} if dry_run else get_current_hashes()
     failures = []
-    with _get_gdal_connection() as source:
+    source = _get_gdal_connection()
+    try:
         for item_id, tables in services.items():
             try:
                 refresh_tables = []
@@ -91,13 +92,14 @@ def migrate_existing_services(dry_run: bool = False) -> None:
                 set_preferred_time_reference(item)
                 logger.info("Migrated service %s", item_id)
             except Exception as error:
-                logger.error(
+                logger.exception(
                     "Failed to migrate service %s: %s",
                     item_id,
                     error,
-                    exc_info=True,
                 )
                 failures.append(item_id)
+    finally:
+        source.Close()
 
     if failures:
         raise RuntimeError(

@@ -710,6 +710,58 @@ class TestZipAndUploadFgdb:
 class TestUpdateFeatureServices:
     """Test cases for the update_feature_services function."""
 
+    @pytest.mark.parametrize("invalid_count", [0, 9])
+    def test_invalid_feature_counts_do_not_persist_hash_or_report_success(
+        self, monkeypatch, invalid_count
+    ):
+        from dolly import agol
+
+        invalid_table = "sgid.society.cemeteries"
+        valid_table = "sgid.transportation.roads"
+        lookup = {
+            invalid_table: {
+                "item_id": "cemeteries",
+                "published_name": "Utah Cemeteries",
+            },
+            valid_table: {"item_id": "roads", "published_name": "Utah Roads"},
+        }
+        summary = Mock()
+        set_hash = Mock()
+        monkeypatch.setattr(agol, "get_current_summary", Mock(return_value=summary))
+        monkeypatch.setattr(agol, "_get_service_item_from_agol", Mock())
+        monkeypatch.setattr(agol, "_get_appropriate_service_layer", Mock())
+        monkeypatch.setattr(agol, "_truncate_and_append", Mock(return_value=True))
+        monkeypatch.setattr(
+            agol,
+            "_count_features_in_agol_service",
+            Mock(side_effect=[10, invalid_count, 10, 10]),
+        )
+        monkeypatch.setattr(agol, "set_table_hash", set_hash)
+        gdb_item = Mock()
+
+        updated = agol.update_feature_services(
+            gdb_item,
+            [invalid_table, valid_table],
+            lookup,
+            {invalid_table: "hash1", valid_table: "hash2"},
+            {invalid_table: 10, valid_table: 10},
+            Mock(),
+        )
+
+        assert updated == {valid_table}
+        set_hash.assert_called_once_with(valid_table, "hash2")
+        summary.add_table_updated.assert_called_once_with(valid_table, "roads")
+        if invalid_count == 0:
+            assert summary.add_table_error.call_args.args[:2] == (
+                invalid_table,
+                "zero_features",
+            )
+        else:
+            summary.add_feature_count_mismatch.assert_called_once_with(
+                invalid_table, 10, invalid_count
+            )
+        gdb_item.delete.assert_not_called()
+
     @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.retry")
@@ -760,7 +812,7 @@ class TestUpdateFeatureServices:
 
         source_counts = {
             "sgid.society.cemeteries": 1000,
-            "sgid.transportation.roads": 2000,
+            "sgid.transportation.roads": 1000,
         }
 
         from dolly.agol import update_feature_services

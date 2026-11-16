@@ -91,7 +91,10 @@ The script sets the preferred Mountain time reference on every existing
 Dolly-managed service in `SGID.META.AGOLItems`. Datasets with source datetime
 fields are force-refreshed from internal through Dolly's UTC export and
 truncate/append pipeline, regardless of their stored hashes. Date-only fields
-do not trigger a refresh. Successful updates persist the current source hash.
+do not trigger a refresh. Updates with zero destination features or a detected
+source/destination count mismatch fail validation: their hashes are not advanced
+and their preferred time reference is not applied. Successful updates persist
+the current source hash.
 Local exports use isolated temporary directories.
 
 Failures are logged per service, other services are attempted, and the script

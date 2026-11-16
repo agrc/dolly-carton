@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from textwrap import dedent
 from typing import cast
@@ -495,7 +495,7 @@ def _convert_fgdb_datetime_fields_to_utc(
                 seconds=seconds
             )
             utc_datetime = local_datetime.replace(tzinfo=SOURCE_TIME_ZONE).astimezone(
-                timezone.utc
+                UTC
             )
             feature.SetField(
                 index,
