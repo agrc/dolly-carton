@@ -765,7 +765,7 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(
+        updated = update_feature_services(
             mock_gdb_item,
             tables,
             agol_items_lookup,
@@ -782,6 +782,7 @@ class TestUpdateFeatureServices:
         # Verify cleanup - gdb item should be deleted
         mock_retry.assert_called_once_with(mock_gdb_item.delete, permanent=True)
         mock_logger.info.assert_any_call("deleting temporary FGDB item")
+        assert updated == set(tables)
 
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol.logger")
@@ -804,7 +805,7 @@ class TestUpdateFeatureServices:
 
         from dolly.agol import update_feature_services
 
-        update_feature_services(
+        updated = update_feature_services(
             mock_gdb_item,
             tables,
             agol_items_lookup,
@@ -815,6 +816,7 @@ class TestUpdateFeatureServices:
 
         # Should not delete gdb item when there are errors
         mock_gdb_item.delete.assert_not_called()
+        assert updated == set()
 
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol.logger")
@@ -1047,6 +1049,7 @@ class TestConfigurePublishedService:
         mock_flc = Mock()
         mock_flc.manager = mock_manager
         mock_flc_class.fromitem.return_value = mock_flc
+        mock_retry.return_value = {"success": True}
 
         from dolly.agol import _configure_published_service
 
@@ -1065,7 +1068,14 @@ class TestConfigurePublishedService:
 
         # Verify capabilities update
         mock_retry.assert_any_call(
-            mock_manager.update_definition, {"capabilities": "Query,Extract"}
+            mock_manager.update_definition,
+            {
+                "capabilities": "Query,Extract",
+                "preferredTimeReference": {
+                    "timeZone": "Mountain Standard Time",
+                    "respectsDaylightSaving": True,
+                },
+            },
         )
 
         # Verify move to category folder
@@ -1102,6 +1112,7 @@ class TestConfigurePublishedService:
         mock_flc = Mock()
         mock_flc.manager = mock_manager
         mock_flc_class.fromitem.return_value = mock_flc
+        mock_retry.return_value = {"success": True}
 
         from dolly.agol import _configure_published_service
 
@@ -1115,6 +1126,44 @@ class TestConfigurePublishedService:
         mock_item.protect.assert_not_called()
 
         assert result is True
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.FeatureLayerCollection")
+    def test_set_preferred_time_reference(self, mock_flc_class, mock_retry):
+        mock_item = Mock()
+        mock_item.id = "service-item"
+        mock_manager = Mock()
+        mock_flc_class.fromitem.return_value.manager = mock_manager
+        mock_retry.return_value = {"success": True}
+
+        from dolly.agol import set_preferred_time_reference
+
+        set_preferred_time_reference(mock_item)
+
+        mock_retry.assert_called_once_with(
+            mock_manager.update_definition,
+            {
+                "preferredTimeReference": {
+                    "timeZone": "Mountain Standard Time",
+                    "respectsDaylightSaving": True,
+                }
+            },
+        )
+
+    @patch("dolly.agol.retry")
+    @patch("dolly.agol.FeatureLayerCollection")
+    def test_set_preferred_time_reference_rejects_unsuccessful_response(
+        self, mock_flc_class, mock_retry
+    ):
+        mock_item = Mock()
+        mock_item.id = "service-item"
+        mock_flc_class.fromitem.return_value.manager = Mock()
+        mock_retry.return_value = {"success": False, "error": "Rejected"}
+
+        from dolly.agol import set_preferred_time_reference
+
+        with pytest.raises(RuntimeError, match="did not confirm"):
+            set_preferred_time_reference(mock_item)
 
     @patch("dolly.agol._generate_service_tags")
     @patch("dolly.agol.logger")

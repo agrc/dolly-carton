@@ -21,6 +21,10 @@ from dolly.utils import (
 logger = logging.getLogger(__name__)
 
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
+PREFERRED_TIME_REFERENCE = {
+    "timeZone": "Mountain Standard Time",
+    "respectsDaylightSaving": True,
+}
 
 
 def _generate_upload_title(fgdb_stem: str) -> str:
@@ -285,6 +289,24 @@ def _get_service_item_from_agol(
     return item
 
 
+def _update_feature_service_definition(item: Item, definition: dict) -> None:
+    manager = FeatureLayerCollection.fromitem(item).manager
+    result = retry(manager.update_definition, definition)
+    if not isinstance(result, dict) or result.get("success") is not True:
+        item_id = getattr(item, "id", "unknown")
+        raise RuntimeError(
+            f"AGOL did not confirm the service definition update for item {item_id}: "
+            f"{result}"
+        )
+
+
+def set_preferred_time_reference(item: Item) -> None:
+    """Set the preferred Mountain time reference on a hosted feature service."""
+    _update_feature_service_definition(
+        item, {"preferredTimeReference": PREFERRED_TIME_REFERENCE}
+    )
+
+
 def _get_appropriate_service_layer(
     item: Item, table: str, agol_items_lookup: dict[str, dict]
 ) -> Table | FeatureLayer:
@@ -379,7 +401,7 @@ def update_feature_services(
     current_hashes: dict[str, str],
     source_counts: dict[str, int],
     gis_connection: GIS,
-) -> None:
+) -> set[str]:
     """
     Update feature services in AGOL with new FGDB data.
 
@@ -390,9 +412,13 @@ def update_feature_services(
         current_hashes: Dictionary mapping table names to their current hashes
         source_counts: Dictionary mapping table names to their source feature counts
         gis_connection: GIS connection
+
+    Returns:
+        Tables whose data update and hash persistence succeeded.
     """
     summary = get_current_summary()
     has_errors = False
+    updated_tables: set[str] = set()
     for table in tables:
         # Get the AGOL item for this table
         item = _get_service_item_from_agol(table, agol_items_lookup, gis_connection)
@@ -463,6 +489,7 @@ def update_feature_services(
                     item_id = agol_items_lookup[table]["item_id"]
                     summary.add_table_updated(table, item_id)
                 set_table_hash(table, current_hashes[table])
+                updated_tables.add(table)
         except Exception as e:
             logger.exception(f"Failed to update feature service for {table}")
             has_errors = True
@@ -473,6 +500,8 @@ def update_feature_services(
     if not has_errors:
         logger.info("deleting temporary FGDB item")
         retry(gdb_item.delete, permanent=True)
+
+    return updated_tables
 
 
 def _create_and_publish_service(
@@ -553,8 +582,13 @@ def _configure_published_service(
         )
 
         # Enable "Allow others to export to different formats" checkbox
-        manager = FeatureLayerCollection.fromitem(item).manager
-        retry(manager.update_definition, {"capabilities": "Query,Extract"})
+        _update_feature_service_definition(
+            item,
+            {
+                "capabilities": "Query,Extract",
+                "preferredTimeReference": PREFERRED_TIME_REFERENCE,
+            },
+        )
 
         # Move to appropriate category folder
         retry(item.move, category)
