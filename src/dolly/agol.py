@@ -414,7 +414,8 @@ def update_feature_services(
         gis_connection: GIS connection
 
     Returns:
-        Tables whose data update and hash persistence succeeded.
+        Tables whose data update and hash persistence succeeded, excluding
+        detected zero-feature results and source/destination count mismatches.
     """
     summary = get_current_summary()
     has_errors = False
@@ -472,6 +473,8 @@ def update_feature_services(
                         logger.error(f"📊 {error_msg}")
                         if summary:
                             summary.add_table_error(table, "zero_features", error_msg)
+                        has_errors = True
+                        continue
                     else:
                         # Check for count mismatch with source
                         source_count = source_counts.get(table, -1)
@@ -483,6 +486,8 @@ def update_feature_services(
                             logger.error(
                                 f"📊 Feature count mismatch for {table}: Source {source_count:,} != Final {post_append_count:,}"
                             )
+                            has_errors = True
+                            continue
 
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
