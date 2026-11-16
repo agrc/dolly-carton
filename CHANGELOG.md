@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.10](https://github.com/agrc/dolly-carton/compare/v1.0.9...v1.0.10) (2026-11-16)
+
+
+### Bug Fixes
+
+* validate refreshed service data ([6383875](https://github.com/agrc/dolly-carton/commit/638387568f0b872938a47b7f8540ba22c65cc449))
+
+
+### Documentation
+
+* document ArcPy runtime strategy ([6e9028d](https://github.com/agrc/dolly-carton/commit/6e9028de29ffc40cbeb1b108ee22317dc440cdd5))
+
 ## [1.0.9](https://github.com/agrc/dolly-carton/compare/v1.0.8...v1.0.9) (2026-11-09)
 
 
