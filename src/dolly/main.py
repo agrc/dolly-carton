@@ -253,7 +253,7 @@ def cleanup_dev_agol_items() -> None:
 
 def cli() -> None:
     """
-    CLI entry point for the dolly command defined in setup.py.
+    CLI entry point for the dolly command defined in pyproject.toml.
 
     This function is the actual console script entry point that gets called when
     users run 'dolly' from the command line. It uses typer.run() to handle
