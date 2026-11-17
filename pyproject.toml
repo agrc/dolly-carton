@@ -59,6 +59,9 @@ markers = [
     "real_backoff: run retry tests with real backoff timing (disables DOLLY_FAST_RETRY)",
 ]
 
+[tool.ruff.lint]
+extend-select = ["I"]
+
 [tool.coverage.run]
 source = ["src/dolly"]
 branch = true
