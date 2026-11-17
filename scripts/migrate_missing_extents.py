@@ -76,7 +76,7 @@ def _organization_services(gis: GIS, item_id: str | None) -> list[Item]:
             )
 
     for item in items:
-if item["orgId"] != org_id or item.type != "Feature Service":
+        if item["orgId"] != org_id or item.type != "Feature Service":
             raise ValueError(
                 f"Item {item.id} is not a feature service in this organization"
             )
