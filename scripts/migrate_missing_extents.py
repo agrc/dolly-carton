@@ -32,7 +32,7 @@ def _organization_services(gis: GIS, item_id: str | None) -> list[Item]:
             raise LookupError(f"AGOL item {item_id} was not found")
         items = [item]
     else:
-        query = f'accountid:{org_id} AND type:"Feature Service"'
+        query = f'orgid:{org_id} AND type:"Feature Service"'
         items = []
         start = 1
         expected_total = None
@@ -76,7 +76,7 @@ def _organization_services(gis: GIS, item_id: str | None) -> list[Item]:
             )
 
     for item in items:
-        if item.get("orgId") != org_id or item.type != "Feature Service":
+if item["orgId"] != org_id or item.type != "Feature Service":
             raise ValueError(
                 f"Item {item.id} is not a feature service in this organization"
             )
