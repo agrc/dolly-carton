@@ -1,5 +1,5 @@
 import sys
-from unittest.mock import Mock, call
+from unittest.mock import MagicMock, Mock, call
 
 import pytest
 
@@ -28,12 +28,12 @@ def dependencies(monkeypatch):
 
 
 def make_item(item_id, keywords=None, org_id="test-org"):
-    item = Mock()
+    item = MagicMock()
     item.id = item_id
     item.type = "Feature Service"
     item.typeKeywords = ["Hosted Service"] if keywords is None else keywords
     item.url = f"https://services.arcgis.com/{org_id}/arcgis/rest/services/{item_id}/FeatureServer"
-    item.get.side_effect = lambda key: org_id if key == "orgId" else None
+    item.__getitem__.side_effect = lambda key: org_id if key == "orgId" else None
     return item
 
 
@@ -78,12 +78,12 @@ def test_dry_run_paginates_and_reports_affected_views(gis, dependencies, caplog)
 
     assert gis.content.advanced_search.call_args_list == [
         call(
-            query='accountid:test-org AND type:"Feature Service"',
+            query='orgid:test-org AND type:"Feature Service"',
             start=1,
             max_items=100,
         ),
         call(
-            query='accountid:test-org AND type:"Feature Service"',
+            query='orgid:test-org AND type:"Feature Service"',
             start=3,
             max_items=100,
         ),
