@@ -2,6 +2,7 @@ import logging
 import os
 import zipfile
 from datetime import datetime
+from math import isfinite
 from pathlib import Path
 from typing import cast
 
@@ -318,6 +319,127 @@ def set_preferred_time_reference(item: Item) -> None:
     )
 
 
+def _is_valid_extent(extent: object) -> bool:
+    if not isinstance(extent, dict):
+        return False
+
+    coordinates: list[int | float] = []
+    for key in ("xmin", "ymin", "xmax", "ymax"):
+        value = extent.get(key)
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, (int, float))
+            or not isfinite(value)
+        ):
+            return False
+        coordinates.append(value)
+
+    spatial_reference = extent.get("spatialReference")
+    return (
+        coordinates[0] <= coordinates[2]
+        and coordinates[1] <= coordinates[3]
+        and isinstance(spatial_reference, dict)
+        and any(
+            spatial_reference.get(key) for key in ("wkid", "latestWkid", "wkt", "wkt2")
+        )
+    )
+
+
+def query_feature_layer_extent(layer: FeatureLayer) -> dict | None:
+    """Return the feature extent, or None when the layer has no spatial features."""
+    timestamp_ms = int(datetime.now().timestamp() * 1000)
+    result = retry(
+        layer.query,
+        where=f"{timestamp_ms}={timestamp_ms}",
+        return_extent_only=True,
+    )
+    if not isinstance(result, dict) or "extent" not in result:
+        error = (
+            result.get("error") if isinstance(result, dict) else type(result).__name__
+        )
+        raise RuntimeError(f"Invalid extent query response for {layer.url}: {error}")
+
+    extent = result["extent"]
+    if extent is not None and not _is_valid_extent(extent):
+        raise RuntimeError(f"Invalid feature extent for {layer.url}: {extent}")
+    return extent
+
+
+def get_spatial_index(layer: FeatureLayer) -> dict[str, str]:
+    """Get the layer's spatial index definition for an index rebuild."""
+    indexes = layer.properties.get("indexes")
+    if not isinstance(indexes, list):
+        raise TypeError(f"No index definitions available for {layer.url}")
+
+    spatial_indexes = [
+        index
+        for index in indexes
+        if isinstance(index, dict)
+        and (
+            str(index.get("indexType", "")).lower() == "spatial"
+            or (
+                not index.get("indexType")
+                and str(index.get("fields", "")).lower() == "shape"
+            )
+        )
+    ]
+    if len(spatial_indexes) != 1:
+        raise RuntimeError(
+            f"Expected one spatial index for {layer.url}, found {len(spatial_indexes)}"
+        )
+
+    index = spatial_indexes[0]
+    name = index.get("name")
+    fields = index.get("fields")
+    if (
+        not isinstance(name, str)
+        or not name
+        or not isinstance(fields, str)
+        or not fields
+    ):
+        raise RuntimeError(f"Invalid spatial index definition for {layer.url}: {index}")
+    return {"name": name, "fields": fields}
+
+
+def ensure_feature_layer_extent(
+    layer: FeatureLayer, *, force_rebuild: bool = False
+) -> bool:
+    """Ensure a feature layer has a valid definition extent.
+
+    Return False if the layer has no spatial features, otherwise raise on failure.
+    """
+    manager = layer.manager
+    if not force_rebuild:
+        extent = manager.properties.get("extent")
+        if _is_valid_extent(extent):
+            return True
+        if extent is None and query_feature_layer_extent(layer) is None:
+            logger.info(
+                "Skipping extent rebuild for %s: no spatial features", layer.url
+            )
+            return False
+
+    index = get_spatial_index(layer)
+    logger.info("Rebuilding spatial index for %s", layer.url)
+    result = retry(manager.update_definition, {"indexes": [index]})
+    if not isinstance(result, dict) or result.get("success") is not True:
+        raise RuntimeError(f"Spatial index rebuild failed for {layer.url}: {result}")
+
+    extent = manager.properties.get("extent")
+    if not _is_valid_extent(extent):
+        if extent is None and query_feature_layer_extent(layer) is None:
+            logger.info(
+                "Skipping extent verification for %s: no spatial features", layer.url
+            )
+            return False
+        raise RuntimeError(
+            f"Spatial index rebuild did not produce a valid extent for {layer.url}"
+        )
+
+    logger.info("Verified rebuilt extent for %s", layer.url)
+    return True
+
+
 def _get_appropriate_service_layer(
     item: Item, table: str, agol_items_lookup: dict[str, dict]
 ) -> Table | FeatureLayer:
@@ -425,8 +547,8 @@ def update_feature_services(
         gis_connection: GIS connection
 
     Returns:
-        Tables whose data update and hash persistence succeeded, excluding
-        detected zero-feature results and source/destination count mismatches.
+        Tables whose data update, extent verification, and hash persistence succeeded,
+        excluding detected zero-feature results and source/destination count mismatches.
     """
     summary = get_current_summary()
     has_errors = False
@@ -500,11 +622,14 @@ def update_feature_services(
                             has_errors = True
                             continue
 
+                if agol_items_lookup[table]["geometry_type"] != "STAND ALONE":
+                    ensure_feature_layer_extent(service_item, force_rebuild=True)
+
+                set_table_hash(table, current_hashes[table])
                 logger.info(f"Successfully updated feature service for {table}")
                 if summary:
                     item_id = agol_items_lookup[table]["item_id"]
                     summary.add_table_updated(table, item_id)
-                set_table_hash(table, current_hashes[table])
                 updated_tables.add(table)
         except Exception as e:
             logger.exception(f"Failed to update feature service for {table}")
@@ -660,10 +785,20 @@ def publish_new_feature_services(
                 summary.add_table_error(table, "publish", error_msg)
             continue
 
+        try:
+            # Register the configured item first so an extent failure retries it
+            # as an existing service instead of publishing a duplicate.
+            update_agol_item(table, item.id)
+            if agol_items_lookup[table]["geometry_type"] != "STAND ALONE":
+                layer = _get_appropriate_service_layer(item, table, agol_items_lookup)
+                ensure_feature_layer_extent(layer)
+            set_table_hash(table, current_hashes[table])
+        except Exception as error:
+            logger.exception(f"Failed to finish publishing feature service for {table}")
+            if summary:
+                summary.add_table_error(table, "publish", str(error))
+            continue
+
         logger.info(f"Published new feature service for {table} with item ID {item.id}")
         if summary:
             summary.add_table_published(table, item.id)
-        set_table_hash(table, current_hashes[table])
-
-        # Update the internal database with the new item ID
-        update_agol_item(table, item.id)
