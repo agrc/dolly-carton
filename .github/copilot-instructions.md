@@ -27,7 +27,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - **Microsoft SQL Server** - Internal database connectivity via ODBC Driver 18
 
 ### Key Python Libraries
-- `arcgis==2.*` - ArcGIS Online API client
+- `arcgis==2.4.2` - ArcGIS Online API client
 - `google-cloud-firestore==2.*` - Firestore integration
 - `pyodbc==5.*` - SQL Server database connectivity
 - ArcPy - Windows ArcGIS runtime dependency; do not add it to the Docker or CI environment
@@ -86,12 +86,16 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - `FIRESTORE_EMULATOR_HOST=127.0.0.1:8080`: Local Firestore emulator endpoint
 - `GOOGLE_CLOUD_PROJECT=demo-test`: Development project identifier
 
+## Learnings
+
+- **Docker build context safety**: `.dockerignore` does not exclude gitignored `secrets.json` or `secrets.*.json` files, and `COPY . /app` can include them in an image. Build from a sanitized copy of the current working tree that excludes credentials but retains the tracked `src/dolly/secrets/secrets_template.json`.
+
 ## Build and Testing
 
 ### Docker Build Process
-- **Build test image**:
+- **Build test image** from a sanitized copy of the working tree:
   ```bash
-  docker build --target test -t dolly-carton:test .
+  docker build --target test -t dolly-carton:test /path/to/sanitized-context
   ```
   - **CRITICAL**: Takes 1-5 minutes depending on network. NEVER CANCEL. Set timeout to 30+ minutes.
   - Downloads Microsoft ODBC Driver 18 for SQL Server
