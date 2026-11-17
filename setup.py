@@ -37,7 +37,7 @@ setup(
     },
     keywords=["gis"],
     install_requires=[
-        "arcgis==2.*",
+        "arcgis==2.4.2",
         "google-cloud-firestore==2.*",
         "google-cloud-logging==3.*",
         "humanize==4.*",

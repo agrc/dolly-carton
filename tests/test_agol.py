@@ -1,6 +1,6 @@
 import zipfile
 from pathlib import Path
-from unittest.mock import ANY, Mock, patch
+from unittest.mock import ANY, Mock, call, patch
 
 import pytest
 
@@ -17,6 +17,7 @@ from dolly.agol import (
     _search_existing_item,
     _truncate_and_append,
     _upload_item_to_agol,
+    ensure_feature_layer_extent,
     get_gis_connection,
 )
 
@@ -674,6 +675,176 @@ class TestZipAndUploadFgdb:
         assert result == mock_uploaded_item
 
 
+@pytest.fixture
+def spatial_layer():
+    layer = Mock()
+    layer.url = "https://example.arcgis.com/FeatureServer/0"
+    layer.properties = {
+        "indexes": [
+            {"name": "oid", "fields": "OBJECTID", "indexType": "Attribute"},
+            {"name": "shape_idx", "fields": "Shape", "indexType": "Spatial"},
+        ]
+    }
+    extent = {
+        "xmin": 1.0,
+        "ymin": 2.0,
+        "xmax": 3.0,
+        "ymax": 4.0,
+        "spatialReference": {"wkid": 102100, "latestWkid": 3857},
+    }
+    layer.query.return_value = {"extent": extent}
+    layer.manager.properties = {"extent": None}
+
+    def rebuild(definition):
+        layer.manager.properties["extent"] = extent
+        return {"success": True}
+
+    layer.manager.update_definition.side_effect = rebuild
+    return layer
+
+
+class TestFeatureLayerExtents:
+    @pytest.mark.parametrize("extent_exists", [False, True])
+    def test_rebuilds_spatial_index_and_verifies_extent(
+        self, spatial_layer, extent_exists
+    ):
+        if extent_exists:
+            spatial_layer.manager.properties["extent"] = (
+                spatial_layer.query.return_value["extent"]
+            )
+
+        assert ensure_feature_layer_extent(spatial_layer, force_rebuild=True) is True
+
+        spatial_layer.manager.update_definition.assert_called_once_with(
+            {"indexes": [{"name": "shape_idx", "fields": "Shape"}]}
+        )
+        spatial_layer.query.assert_not_called()
+
+    def test_valid_new_layer_does_not_rebuild(self, spatial_layer):
+        spatial_layer.manager.properties["extent"] = spatial_layer.query.return_value[
+            "extent"
+        ]
+
+        assert ensure_feature_layer_extent(spatial_layer) is True
+
+        spatial_layer.manager.update_definition.assert_not_called()
+        spatial_layer.query.assert_not_called()
+
+    def test_missing_extent_rebuilds_after_checking_for_spatial_features(
+        self, spatial_layer
+    ):
+        assert ensure_feature_layer_extent(spatial_layer) is True
+
+        spatial_layer.manager.update_definition.assert_called_once()
+        assert spatial_layer.query.call_count == 1
+        assert spatial_layer.query.call_args.kwargs["return_extent_only"] is True
+
+    def test_no_spatial_features_do_not_rebuild(self, spatial_layer):
+        spatial_layer.query.return_value = {"extent": None}
+
+        assert ensure_feature_layer_extent(spatial_layer) is False
+
+        spatial_layer.manager.update_definition.assert_not_called()
+
+    def test_rebuilt_layer_without_spatial_features_needs_no_extent(
+        self, spatial_layer
+    ):
+        spatial_layer.query.return_value = {"extent": None}
+        spatial_layer.manager.update_definition.side_effect = None
+        spatial_layer.manager.update_definition.return_value = {"success": True}
+
+        assert ensure_feature_layer_extent(spatial_layer, force_rebuild=True) is False
+
+        spatial_layer.manager.update_definition.assert_called_once()
+        spatial_layer.query.assert_called_once()
+
+    @pytest.mark.parametrize("response", [{"success": False}, None])
+    def test_rejected_rebuild_is_an_error(self, spatial_layer, response):
+        spatial_layer.manager.update_definition.side_effect = None
+        spatial_layer.manager.update_definition.return_value = response
+
+        with pytest.raises(RuntimeError, match="Spatial index rebuild failed"):
+            ensure_feature_layer_extent(spatial_layer)
+
+    @pytest.mark.parametrize(
+        "extent",
+        [
+            None,
+            {
+                "xmin": 1,
+                "ymin": 2,
+                "xmax": 0,
+                "ymax": 4,
+                "spatialReference": {"wkid": 3857},
+            },
+            {
+                "xmin": 1,
+                "ymin": 2,
+                "xmax": 3,
+                "ymax": 4,
+            },
+        ],
+    )
+    def test_rebuild_must_produce_valid_definition_extent(self, spatial_layer, extent):
+        spatial_layer.manager.properties["extent"] = extent
+        spatial_layer.manager.update_definition.side_effect = None
+        spatial_layer.manager.update_definition.return_value = {"success": True}
+
+        with pytest.raises(RuntimeError, match="did not produce a valid extent"):
+            ensure_feature_layer_extent(spatial_layer, force_rebuild=True)
+
+    def test_rebuild_accepts_valid_extent_without_querying_features(
+        self, spatial_layer
+    ):
+        spatial_layer.manager.properties["extent"] = {
+            "xmin": 1,
+            "ymin": 2,
+            "xmax": 2,
+            "ymax": 4,
+            "spatialReference": {"wkid": 4326},
+        }
+        spatial_layer.manager.update_definition.side_effect = None
+        spatial_layer.manager.update_definition.return_value = {"success": True}
+
+        assert ensure_feature_layer_extent(spatial_layer, force_rebuild=True) is True
+
+        spatial_layer.query.assert_not_called()
+
+    @pytest.mark.parametrize(
+        "response",
+        [
+            {},
+            {"extent": {"xmin": 0, "ymin": 0, "xmax": 1, "ymax": 1}},
+            {
+                "extent": {
+                    "xmin": float("nan"),
+                    "ymin": 0,
+                    "xmax": 1,
+                    "ymax": 1,
+                    "spatialReference": {"wkid": 3857},
+                }
+            },
+        ],
+    )
+    def test_invalid_query_response_is_an_error(self, spatial_layer, response):
+        spatial_layer.query.return_value = response
+
+        with pytest.raises(RuntimeError, match="Invalid .*extent"):
+            ensure_feature_layer_extent(spatial_layer)
+
+        spatial_layer.manager.update_definition.assert_not_called()
+
+    def test_missing_spatial_index_is_an_error(self, spatial_layer):
+        spatial_layer.properties["indexes"] = [
+            {"name": "oid", "fields": "OBJECTID", "indexType": "Attribute"}
+        ]
+
+        with pytest.raises(RuntimeError, match="Expected one spatial index"):
+            ensure_feature_layer_extent(spatial_layer)
+
+        spatial_layer.manager.update_definition.assert_not_called()
+
+
 class TestUpdateFeatureServices:
     """Test cases for the update_feature_services function."""
 
@@ -689,8 +860,13 @@ class TestUpdateFeatureServices:
             invalid_table: {
                 "item_id": "cemeteries",
                 "published_name": "Utah Cemeteries",
+                "geometry_type": "POINT",
             },
-            valid_table: {"item_id": "roads", "published_name": "Utah Roads"},
+            valid_table: {
+                "item_id": "roads",
+                "published_name": "Utah Roads",
+                "geometry_type": "POLYLINE",
+            },
         }
         summary = Mock()
         set_hash = Mock()
@@ -698,6 +874,8 @@ class TestUpdateFeatureServices:
         monkeypatch.setattr(agol, "_get_service_item_from_agol", Mock())
         monkeypatch.setattr(agol, "_get_appropriate_service_layer", Mock())
         monkeypatch.setattr(agol, "_truncate_and_append", Mock(return_value=True))
+        ensure_extent = Mock()
+        monkeypatch.setattr(agol, "ensure_feature_layer_extent", ensure_extent)
         monkeypatch.setattr(
             agol,
             "_count_features_in_agol_service",
@@ -716,6 +894,7 @@ class TestUpdateFeatureServices:
         )
 
         assert updated == {valid_table}
+        ensure_extent.assert_called_once()
         set_hash.assert_called_once_with(valid_table, "hash2")
         summary.add_table_updated.assert_called_once_with(valid_table, "roads")
         if invalid_count == 0:
@@ -729,6 +908,7 @@ class TestUpdateFeatureServices:
             )
         gdb_item.delete.assert_not_called()
 
+    @patch("dolly.agol.ensure_feature_layer_extent")
     @patch("dolly.agol._count_features_in_agol_service")
     @patch("dolly.agol.set_table_hash")
     @patch("dolly.agol.retry")
@@ -747,6 +927,7 @@ class TestUpdateFeatureServices:
         mock_retry,
         mock_set_table_hash,
         mock_count_features,
+        mock_ensure_extent,
     ):
         """Test successful update of feature services."""
         # Setup mocks
@@ -761,8 +942,16 @@ class TestUpdateFeatureServices:
             "sgid.transportation.roads": "hash2",
         }
         agol_items_lookup = {
-            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
-            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+            "sgid.society.cemeteries": {
+                "item_id": "cemeteries",
+                "published_name": "Utah Cemeteries",
+                "geometry_type": "POINT",
+            },
+            "sgid.transportation.roads": {
+                "item_id": "roads",
+                "published_name": "Utah Roads",
+                "geometry_type": "POLYLINE",
+            },
         }
 
         mock_item1 = Mock()
@@ -797,11 +986,96 @@ class TestUpdateFeatureServices:
         assert mock_get_service_item.call_count == 2
         assert mock_get_service_layer.call_count == 2
         assert mock_truncate_and_append.call_count == 2
+        assert mock_ensure_extent.call_args_list == [
+            call(mock_service1, force_rebuild=True),
+            call(mock_service2, force_rebuild=True),
+        ]
 
         # Verify cleanup - gdb item should be deleted
         mock_retry.assert_called_once_with(mock_gdb_item.delete, permanent=True)
         mock_logger.info.assert_any_call("deleting temporary FGDB item")
         assert updated == set(tables)
+
+    def test_rebuild_failure_does_not_advance_hash_and_other_tables_continue(
+        self, monkeypatch
+    ):
+        from dolly import agol
+
+        failed = "sgid.society.cemeteries"
+        successful = "sgid.transportation.roads"
+        lookup = {
+            failed: {
+                "item_id": "cemeteries",
+                "published_name": "Utah Cemeteries",
+                "geometry_type": "POINT",
+            },
+            successful: {
+                "item_id": "roads",
+                "published_name": "Utah Roads",
+                "geometry_type": "POLYLINE",
+            },
+        }
+        summary = Mock()
+        set_hash = Mock()
+        ensure_extent = Mock(side_effect=[RuntimeError("index rebuild failed"), True])
+        monkeypatch.setattr(agol, "get_current_summary", Mock(return_value=summary))
+        monkeypatch.setattr(agol, "_get_service_item_from_agol", Mock())
+        monkeypatch.setattr(agol, "_get_appropriate_service_layer", Mock())
+        monkeypatch.setattr(agol, "_truncate_and_append", Mock(return_value=True))
+        monkeypatch.setattr(
+            agol, "_count_features_in_agol_service", Mock(return_value=5)
+        )
+        monkeypatch.setattr(agol, "ensure_feature_layer_extent", ensure_extent)
+        monkeypatch.setattr(agol, "set_table_hash", set_hash)
+        gdb_item = Mock()
+
+        updated = agol.update_feature_services(
+            gdb_item,
+            [failed, successful],
+            lookup,
+            {failed: "hash1", successful: "hash2"},
+            {failed: 5, successful: 5},
+            Mock(),
+        )
+
+        assert updated == {successful}
+        set_hash.assert_called_once_with(successful, "hash2")
+        summary.add_table_error.assert_called_once_with(
+            failed, "update", "index rebuild failed"
+        )
+        summary.add_table_updated.assert_called_once_with(successful, "roads")
+        gdb_item.delete.assert_not_called()
+
+    def test_standalone_table_does_not_rebuild_extent(self, monkeypatch):
+        from dolly import agol
+
+        table = "sgid.society.records"
+        lookup = {
+            table: {
+                "item_id": "records",
+                "published_name": "Utah Records",
+                "geometry_type": "STAND ALONE",
+            }
+        }
+        ensure_extent = Mock()
+        set_hash = Mock()
+        monkeypatch.setattr(agol, "get_current_summary", Mock(return_value=None))
+        monkeypatch.setattr(agol, "_get_service_item_from_agol", Mock())
+        monkeypatch.setattr(agol, "_get_appropriate_service_layer", Mock())
+        monkeypatch.setattr(agol, "_truncate_and_append", Mock(return_value=True))
+        monkeypatch.setattr(
+            agol, "_count_features_in_agol_service", Mock(return_value=5)
+        )
+        monkeypatch.setattr(agol, "ensure_feature_layer_extent", ensure_extent)
+        monkeypatch.setattr(agol, "set_table_hash", set_hash)
+
+        updated = agol.update_feature_services(
+            Mock(), [table], lookup, {table: "hash"}, {table: 5}, Mock()
+        )
+
+        assert updated == {table}
+        ensure_extent.assert_not_called()
+        set_hash.assert_called_once_with(table, "hash")
 
     @patch("dolly.agol._get_service_item_from_agol")
     @patch("dolly.agol.logger")
@@ -1211,6 +1485,8 @@ class TestPublishNewFeatureServices:
     """Test cases for the publish_new_feature_services function."""
 
     @patch("dolly.agol.set_table_hash")
+    @patch("dolly.agol.ensure_feature_layer_extent")
+    @patch("dolly.agol._get_appropriate_service_layer")
     @patch("dolly.agol.update_agol_item")
     @patch("dolly.agol._configure_published_service")
     @patch("dolly.agol._create_and_publish_service")
@@ -1221,6 +1497,8 @@ class TestPublishNewFeatureServices:
         mock_create_publish,
         mock_configure,
         mock_update_agol_item,
+        mock_get_layer,
+        mock_ensure_extent,
         mock_set_table_hash,
     ):
         """Test successful publishing of new feature services."""
@@ -1233,8 +1511,14 @@ class TestPublishNewFeatureServices:
             "sgid.transportation.roads": "hash2",
         }
         agol_items_lookup = {
-            "sgid.society.cemeteries": {"published_name": "Utah Cemeteries"},
-            "sgid.transportation.roads": {"published_name": "Utah Roads"},
+            "sgid.society.cemeteries": {
+                "published_name": "Utah Cemeteries",
+                "geometry_type": "POINT",
+            },
+            "sgid.transportation.roads": {
+                "published_name": "Utah Roads",
+                "geometry_type": "POLYLINE",
+            },
         }
 
         mock_item1 = Mock()
@@ -1255,6 +1539,8 @@ class TestPublishNewFeatureServices:
         assert mock_create_publish.call_count == 2
         assert mock_configure.call_count == 2
         assert mock_update_agol_item.call_count == 2
+        assert mock_get_layer.call_count == 2
+        assert mock_ensure_extent.call_count == 2
 
         # Verify specific calls
         mock_create_publish.assert_any_call(
@@ -1266,6 +1552,49 @@ class TestPublishNewFeatureServices:
 
         mock_update_agol_item.assert_any_call("sgid.society.cemeteries", "item1-id")
         mock_update_agol_item.assert_any_call("sgid.transportation.roads", "item2-id")
+
+    def test_extent_failure_registers_item_but_does_not_save_hash(self, monkeypatch):
+        from dolly import agol
+
+        table = "sgid.society.cemeteries"
+        item = Mock()
+        item.id = "new-item"
+        layer = Mock()
+        lookup = {
+            table: {"published_name": "Utah Cemeteries", "geometry_type": "POINT"}
+        }
+        summary = Mock()
+        register = Mock()
+        ensure_extent = Mock(side_effect=RuntimeError("extent failed"))
+        set_hash = Mock()
+        calls = Mock()
+        calls.attach_mock(register, "register")
+        calls.attach_mock(ensure_extent, "ensure")
+        monkeypatch.setattr(agol, "get_current_summary", Mock(return_value=summary))
+        monkeypatch.setattr(
+            agol, "_create_and_publish_service", Mock(return_value=item)
+        )
+        monkeypatch.setattr(
+            agol, "_configure_published_service", Mock(return_value=True)
+        )
+        monkeypatch.setattr(
+            agol, "_get_appropriate_service_layer", Mock(return_value=layer)
+        )
+        monkeypatch.setattr(agol, "update_agol_item", register)
+        monkeypatch.setattr(agol, "ensure_feature_layer_extent", ensure_extent)
+        monkeypatch.setattr(agol, "set_table_hash", set_hash)
+
+        agol.publish_new_feature_services([table], lookup, {table: "hash"}, Mock())
+
+        assert calls.mock_calls == [
+            call.register(table, "new-item"),
+            call.ensure(layer),
+        ]
+        set_hash.assert_not_called()
+        summary.add_table_published.assert_not_called()
+        summary.add_table_error.assert_called_once_with(
+            table, "publish", "extent failed"
+        )
 
     @patch("dolly.agol._create_and_publish_service")
     @patch("dolly.agol.logger")

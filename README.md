@@ -47,6 +47,9 @@ Collection: dolly-carton
 ```
 
 This enables reliable retry semantics: only fully successful tables advance their stored hash.
+After a feature layer update, Dolly rebuilds its spatial index and verifies the
+layer definition's extent before saving the hash.
+Standalone tables and layers without spatial features do not need an extent.
 
 ## Setup
 
@@ -126,6 +129,38 @@ pytest
 # Format
 ruff format . --write
 ```
+
+### One-time missing extent migration
+
+The migration inspects feature services throughout the connected ArcGIS Online
+organization, not just Dolly-managed services. It requires the default
+organization administrator role and production configuration. The default is
+a read-only dry run:
+
+```bash
+# Inspect the organization without changing it
+APP_ENVIRONMENT=prod python -m scripts.migrate_missing_extents
+
+# Inspect and then repair one item as a pilot
+APP_ENVIRONMENT=prod python -m scripts.migrate_missing_extents --item-id ITEM_ID
+APP_ENVIRONMENT=prod python -m scripts.migrate_missing_extents --item-id ITEM_ID --apply
+
+# After reviewing the inventory and pilot, repair the organization
+APP_ENVIRONMENT=prod python -m scripts.migrate_missing_extents --apply
+```
+
+Only hosted spatial layers with a missing definition extent and spatial
+features are repaired. Healthy layers, standalone tables, empty layers, and
+non-hosted services are skipped. Affected hosted views are reported for manual
+review and are not changed. The script processes other layers after failures and
+exits with an error if any layer fails or an affected view needs review. It
+refuses to proceed if the organization search reaches ArcGIS's 10,000-item
+limit or returns an incomplete inventory.
+
+Run the migration when layers are not in use and not concurrently with Dolly:
+rebuilding indexes may take significant time and slow queries. Successful
+repairs are verified against authenticated layer metadata; public ArcGIS
+Online caches can continue serving a stale extent until they expire.
 
 ### Slack summary message testing
 
