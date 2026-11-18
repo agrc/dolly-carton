@@ -537,8 +537,8 @@ class TestSlackIntegration:
     def test_build_slack_messages_with_gcp_environment(self):
         """Test building a message when running in GCP environment."""
         summary = ProcessSummary()
-        summary.start_time = 100.0
-        summary.end_time = 110.0
+        summary.start_time = 1_700_000_000.0
+        summary.end_time = summary.start_time + 10
         summary.add_table_updated("sgid.test.table1", None)
 
         # Mock the GCP metadata request to simulate running in GCP

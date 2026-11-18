@@ -16,11 +16,11 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 
 ### Core Technologies
 - **Python 3.12** - Primary language
-- **GDAL 3.11.3** - Geospatial data processing (CRITICAL: Only available via Docker)
+- **GDAL 3.11.3** - Geospatial data processing (provided by Docker or the Windows ArcGIS conda environment)
   - **Important**: `gdal.UseExceptions()` is enabled, so GDAL functions raise exceptions instead of returning None on errors
   - No need to check GDAL results for None values - exceptions will be raised automatically
 - **ArcPy** - Provided by the Windows ArcGIS runtime for production FGDB creation and projection; not installed in Docker or CI
-- **Docker** - Required for the GDAL development and test environment
+- **Docker** - Standard development and CI test environment
 - **ArcGIS Python API** - ArcGIS Online integration
 - **Google Cloud Firestore** - State management for prod/staging
 - **Firebase Emulator** - Local Firestore development
@@ -36,7 +36,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 - `pytest==8.*`, `ruff==0.*` - Testing and code quality
 
 ### Development and Runtime Requirements
-- **Docker is REQUIRED for development and CI** because the GDAL Python bindings are only available in the configured image
+- **Use Docker for standard development and CI**; the Windows `dolly` conda environment also supports tests as described under "Windows conda tests"
 - **Production ArcPy operations require the Windows ArcGIS runtime**; the dev container and CI do not run ArcPy
 - VS Code with Remote-Containers extension for optimal development experience
 - Keep ArcPy imports inside ArcPy-specific functions so non-ArcPy modules and tests can load in Docker
@@ -64,7 +64,7 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
 ## Development Setup
 
 ### Bootstrap Process
-1. **Open in VS Code dev container** (REQUIRED):
+1. **Open in VS Code dev container** (standard development workflow):
    - Open project in VS Code
    - Select "Reopen in Container" when prompted
    - Automatically builds `dev_container` Docker target with all dependencies
@@ -110,14 +110,25 @@ Dolly Carton is a Python CLI application that automatically syncs SGID (Statewid
   - Includes coverage reporting (target: auto, threshold: 1%)
 
 ### Testing Strategy
-- **Limited tests without Docker** (utils and summary modules only):
+- **Limited tests without GDAL** (utils and summary modules only):
   ```bash
   APP_ENVIRONMENT=dev pytest tests/test_utils.py tests/test_summary.py -v
   ```
   - These modules have no GDAL dependency
-  - All other test modules REQUIRE Docker to run
+  - Other test modules require GDAL from Docker or the Windows `dolly` conda environment
 - **CI/CD Testing**: Pull requests trigger full Docker-based test suite with linting via GitHub Actions
 - ArcPy is not run in CI. Validate actual ArcPy projection and FGDB operations on the supported Windows/ArcGIS host before production use.
+
+#### Windows conda tests
+- From the activated `dolly` conda environment, run tests with native ArcPy loading disabled for that process. The ArcGIS Python API can otherwise initialize ArcPy during imports and crash before test collection; tests mock ArcPy operations.
+- On a mapped network drive or UNC workspace, set `COVERAGE_FILE` to a unique local-disk path. Coverage's SQLite database can fail on UNC paths with `invalid uri authority`; the XML report can remain in the workspace.
+- Preserve the configured pytest options so coverage and other test controls still run:
+  ```powershell
+  $env:APP_ENVIRONMENT = "dev"
+  $env:COVERAGE_FILE = Join-Path $env:TEMP "dolly-carton-$([guid]::NewGuid()).coverage"
+  python -c "import sys; sys.modules['arcpy'] = None; import pytest; sys.exit(pytest.main(['-q']))"
+  ```
+- This validates mocked ArcPy call sites, not real projection or FGDB export operations. Keep the shim confined to the test process.
 
 #### Slack notifications in tests
 - Tests may indirectly call `dolly.summary.finish_summary()` (for example, via `_main_logic()` in `dolly.main`), which posts the process summary to Slack if a webhook URL is configured.

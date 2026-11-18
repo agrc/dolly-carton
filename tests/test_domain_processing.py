@@ -98,7 +98,7 @@ class TestDomainProcessing:
             "domain2": {"type": "range", "min": 0, "max": 100},
         }
         mock_create_domains.assert_called_once_with(
-            expected_domains, "/test/output.gdb"
+            expected_domains, str(Path("/test/output.gdb"))
         )
         mock_apply_domains.assert_called_once()
 
