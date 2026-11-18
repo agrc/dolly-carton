@@ -429,7 +429,7 @@ def _copy_table_to_fgdb(
     agol_item_info: dict,
 ) -> bool:
     """
-    Copy a single table to FGDB using ArcPy.
+    Copy a single table to FGDB using ArcPy and release its workspace cache.
 
     Args:
         internal: Path to the internal SQL Server connection file
@@ -445,37 +445,43 @@ def _copy_table_to_fgdb(
     try:
         import arcpy
 
-        datetime_field_names = {
-            field.name
-            for field in arcpy.ListFields(str(internal / table))
-            if field.type == "Date"
-        }
+        try:
+            datetime_field_names = {
+                field.name
+                for field in arcpy.ListFields(str(internal / table))
+                if field.type == "Date"
+            }
 
-        if not arcpy.Exists(str(output_path)):
-            logger.debug(f"Creating FGDB at {output_path}")
-            arcpy.management.CreateFileGDB(
-                out_folder_path=str(output_path.parent),
-                out_name=output_path.name,
-            )
+            if not arcpy.Exists(str(output_path)):
+                logger.debug(f"Creating FGDB at {output_path}")
+                arcpy.management.CreateFileGDB(
+                    out_folder_path=str(output_path.parent),
+                    out_name=output_path.name,
+                )
 
-        if agol_item_info["geometry_type"].upper() == "STAND ALONE":
-            logger.debug(f"Using arcpy to copy table {table} to FGDB at {output_path}")
-            arcpy.conversion.TableToTable(
-                str(internal / table),
-                str(output_path),
-                get_service_from_title(agol_item_info["published_name"]),
-            )
-        else:
-            logger.debug(f"Using arcpy to project {table} to FGDB at {output_path}")
-            arcpy.management.Project(
-                str(internal / table),
-                str(
-                    output_path
-                    / get_service_from_title(agol_item_info["published_name"])
+            if agol_item_info["geometry_type"].upper() == "STAND ALONE":
+                logger.debug(
+                    f"Using arcpy to copy table {table} to FGDB at {output_path}"
+                )
+                arcpy.conversion.TableToTable(
+                    str(internal / table),
+                    str(output_path),
+                    get_service_from_title(agol_item_info["published_name"]),
+                )
+            else:
+                logger.debug(f"Using arcpy to project {table} to FGDB at {output_path}")
+                arcpy.management.Project(
+                    str(internal / table),
+                    str(
+                        output_path
+                        / get_service_from_title(agol_item_info["published_name"])
+                    ),
+                    out_coor_system=arcpy.SpatialReference(3857),
+                    transform_method="NAD_1983_To_WGS_1984_5",
                 ),
-                out_coor_system=arcpy.SpatialReference(3857),
-                transform_method="NAD_1983_To_WGS_1984_5",
-            )
+        finally:
+            # ArcPy can retain schema locks after geoprocessing tools return.
+            arcpy.management.ClearWorkspaceCache(str(output_path))
 
         layer_name = get_service_from_title(agol_item_info["published_name"])
         if datetime_field_names:
