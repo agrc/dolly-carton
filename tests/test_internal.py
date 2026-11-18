@@ -400,6 +400,11 @@ class TestCreateFgdb:
         date_field.type = "Date"
         arcpy.ListFields.return_value = [date_field]
         convert_dates = Mock()
+        convert_dates.side_effect = (
+            lambda *args: arcpy.management.ClearWorkspaceCache.assert_called_once_with(
+                str(tmp_path / "output.gdb")
+            )
+        )
         monkeypatch.setattr(
             "dolly.internal._convert_fgdb_datetime_fields_to_utc", convert_dates
         )
@@ -456,6 +461,32 @@ class TestCreateFgdb:
             "test_table",
         )
         arcpy.management.Project.assert_not_called()
+
+    @pytest.mark.parametrize("geometry_type", ["POLYGON", "STAND ALONE"])
+    @pytest.mark.parametrize("copy_fails", [False, True])
+    def test_copy_releases_workspace_cache(
+        self, monkeypatch, tmp_path, geometry_type, copy_fails
+    ):
+        arcpy = _mock_arcpy(monkeypatch)
+        operation = (
+            arcpy.conversion.TableToTable
+            if geometry_type == "STAND ALONE"
+            else arcpy.management.Project
+        )
+        if copy_fails:
+            operation.side_effect = RuntimeError("Export failed")
+        output_path = tmp_path / "migration.gdb"
+
+        result = _copy_table_to_fgdb(
+            tmp_path / "internal.sde",
+            "sgid.test.table1",
+            output_path,
+            {"geometry_type": geometry_type, "published_name": "Test Table"},
+        )
+
+        assert result is not copy_fails
+        operation.assert_called_once()
+        arcpy.management.ClearWorkspaceCache.assert_called_once_with(str(output_path))
 
 
 class TestPrepareGdalOptions:
