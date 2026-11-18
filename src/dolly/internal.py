@@ -59,18 +59,6 @@ def _get_database_connection() -> pyodbc.Connection:
     return pyodbc.connect(CONNECTION_STRING)
 
 
-def _get_gdal_connection() -> gdal.Dataset:
-    """
-    Factory function to create a GDAL database connection.
-
-    Returns:
-        gdal.Dataset: GDAL database connection object
-    """
-    #: I could not get this to work with the open_options parameter
-    with gdal.config_options({"MSSQLSPATIAL_LIST_ALL_TABLES": "YES"}):
-        return gdal.OpenEx(f"MSSQL:{CONNECTION_STRING}", gdal.OF_VECTOR)
-
-
 def _get_internal_connection() -> Path:
     """
     Factory function to create an .sde connection file for ArcPy.
@@ -504,15 +492,32 @@ def _copy_table_to_fgdb(
         return False
 
 
-def _get_datetime_field_names(
-    gdal_connection: gdal.Dataset, layer_name: str
-) -> set[str]:
-    layer = gdal_connection.GetLayerByName(layer_name)
-    definition = layer.GetLayerDefn()
+def _get_datetime_field_names(connection: pyodbc.Connection, table: str) -> set[str]:
+    """Inspect SQL Server timestamp columns without requiring GDAL's MSSQL driver."""
+    parts = table.split(".")
+    if len(parts) != 3 or not all(parts):
+        raise ValueError(f"Table name '{table}' must be in format 'sgid.schema.table'")
+
+    query = dedent("""
+        SELECT COLUMN_NAME, DATA_TYPE
+        FROM INFORMATION_SCHEMA.COLUMNS
+        WHERE TABLE_CATALOG = ? AND TABLE_SCHEMA = ? AND TABLE_NAME = ?
+    """)
+    cursor = connection.cursor()
+    try:
+        cursor.execute(query, *parts)
+        rows = cursor.fetchall()
+    finally:
+        cursor.close()
+
+    if not rows:
+        raise LookupError(f"No visible columns found for {table}")
+
     return {
-        definition.GetFieldDefn(index).GetNameRef()
-        for index in range(definition.GetFieldCount())
-        if definition.GetFieldDefn(index).GetType() == ogr.OFTDateTime
+        name
+        for name, data_type in rows
+        if data_type.lower()
+        in {"datetime", "datetime2", "smalldatetime", "datetimeoffset"}
     }
 
 

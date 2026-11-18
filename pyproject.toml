@@ -65,11 +65,7 @@ extend-select = ["I"]
 [tool.coverage.run]
 source = ["src/dolly"]
 branch = true
-omit = [
-    "*/tests/*",
-    "*/__pycache__/*",
-    "*/.*",
-]
+omit = ["*/tests/*", "*/__pycache__/*", "*/.*"]
 
 [tool.coverage.report]
 exclude_lines = [

@@ -111,6 +111,12 @@ and their preferred time reference is not applied. Successful updates persist
 the current source hash.
 Local exports use isolated temporary directories.
 
+Source columns are inspected through pyodbc and ODBC Driver 18 for SQL Server;
+GDAL's optional MSSQLSpatial plugin is not required. The table inventory still
+comes from `SGID.META.AGOLItems`, including standalone tables. Datetime,
+datetime2, smalldatetime, and datetimeoffset columns trigger a refresh; date-only,
+time-only, and SQL Server timestamp/rowversion columns do not.
+
 Failures are logged per service, other services are attempted, and the script
 exits with an error if any migration failed. Rerunning is safe because timestamp
 values are re-exported from internal rather than shifted in place in AGOL.

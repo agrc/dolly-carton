@@ -11,7 +11,7 @@ def dependencies(monkeypatch):
     names = [
         "get_gis_connection",
         "get_agol_items_lookup",
-        "_get_gdal_connection",
+        "_get_database_connection",
         "_get_datetime_field_names",
         "get_current_hashes",
         "create_fgdb",
@@ -22,7 +22,7 @@ def dependencies(monkeypatch):
     mocks = {name: Mock() for name in names}
     for name, mock in mocks.items():
         monkeypatch.setattr(migration, name, mock)
-    mocks["_get_gdal_connection"].return_value = Mock(spec=["GetLayerByName", "Close"])
+    mocks["_get_database_connection"].return_value = Mock(spec=["cursor", "close"])
     mocks["_get_datetime_field_names"].return_value = set()
     mocks["get_current_hashes"].return_value = {}
     mocks["create_fgdb"].side_effect = lambda tables, lookup, *, output_path: (
@@ -46,7 +46,7 @@ def test_migration_updates_unique_existing_service_ids(dependencies):
     gis.content.get.assert_called_once_with("service-1")
     dependencies["set_preferred_time_reference"].assert_called_once_with(item)
     dependencies["create_fgdb"].assert_not_called()
-    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+    dependencies["_get_database_connection"].return_value.close.assert_called_once()
 
 
 def test_migration_force_refreshes_only_timestamp_tables(dependencies):
@@ -94,7 +94,7 @@ def test_migration_reports_failures_after_attempting_all_services(dependencies):
 
     assert gis.content.get.call_count == 2
     dependencies["set_preferred_time_reference"].assert_called_once()
-    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+    dependencies["_get_database_connection"].return_value.close.assert_called_once()
 
 
 @pytest.mark.parametrize("missing_hash", [True, False])
@@ -115,7 +115,7 @@ def test_migration_reports_missing_hash_or_failed_data_refresh(
         migration.migrate_existing_services()
 
     dependencies["set_preferred_time_reference"].assert_not_called()
-    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+    dependencies["_get_database_connection"].return_value.close.assert_called_once()
     if missing_hash:
         dependencies["create_fgdb"].assert_not_called()
     else:
@@ -140,7 +140,7 @@ def test_migration_dry_run_lists_refreshes_without_writes(dependencies, caplog):
     dependencies["create_fgdb"].assert_not_called()
     dependencies["update_feature_services"].assert_not_called()
     dependencies["set_preferred_time_reference"].assert_not_called()
-    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+    dependencies["_get_database_connection"].return_value.close.assert_called_once()
 
 
 def test_migration_closes_source_when_schema_inspection_fails(dependencies):
@@ -154,5 +154,44 @@ def test_migration_closes_source_when_schema_inspection_fails(dependencies):
     with pytest.raises(RuntimeError, match="service-1"):
         migration.migrate_existing_services(dry_run=True)
 
-    dependencies["_get_gdal_connection"].return_value.Close.assert_called_once()
+    dependencies["_get_database_connection"].return_value.close.assert_called_once()
     dependencies["set_preferred_time_reference"].assert_not_called()
+
+
+def test_dry_run_without_mssqlspatial_driver(monkeypatch, caplog):
+    from dolly import internal
+
+    lookup = {
+        "sgid.society.cemeteries": {"item_id": "service-1"},
+        "sgid.society.standalone": {"item_id": "service-2"},
+        "sgid.society.unpublished": {"item_id": None},
+    }
+    monkeypatch.setattr(migration, "get_agol_items_lookup", lambda: lookup)
+    connection = Mock()
+    cursor = connection.cursor.return_value
+    cursor.fetchall.side_effect = [
+        [("updated", "datetime2")],
+        [("calendar_date", "date")],
+    ]
+    connect = Mock(return_value=connection)
+    monkeypatch.setattr(internal.pyodbc, "connect", connect)
+    gdal_open = Mock(
+        side_effect=RuntimeError(
+            "Plugin ogr_MSSQLSpatial.dll is not available in your installation"
+        )
+    )
+    monkeypatch.setattr(internal.gdal, "OpenEx", gdal_open)
+
+    with caplog.at_level("INFO"):
+        migration.migrate_existing_services(dry_run=True)
+
+    assert "Would force data refresh: sgid.society.cemeteries" in caplog.text
+    assert "Metadata only: sgid.society.standalone" in caplog.text
+    assert "unpublished" not in caplog.text
+    gdal_open.assert_not_called()
+    connect.assert_called_once()
+    connection.close.assert_called_once()
+    assert [args[1:] for args, _ in cursor.execute.call_args_list] == [
+        ("sgid", "society", "cemeteries"),
+        ("sgid", "society", "standalone"),
+    ]

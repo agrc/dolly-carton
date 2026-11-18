@@ -12,13 +12,13 @@ from dolly.agol import (
     zip_and_upload_fgdb,
 )
 from dolly.internal import (
+    _get_database_connection,
     _get_datetime_field_names,
-    _get_gdal_connection,
     create_fgdb,
     get_agol_items_lookup,
     get_current_hashes,
 )
-from dolly.utils import get_gdal_layer_name, retry
+from dolly.utils import retry
 
 logger = logging.getLogger(__name__)
 
@@ -38,15 +38,13 @@ def migrate_existing_services(dry_run: bool = False) -> None:
     gis_connection = None if dry_run else get_gis_connection()
     current_hashes = {} if dry_run else get_current_hashes()
     failures = []
-    source = _get_gdal_connection()
+    source = _get_database_connection()
     try:
         for item_id, tables in services.items():
             try:
                 refresh_tables = []
                 for table in tables:
-                    fields = _get_datetime_field_names(
-                        source, get_gdal_layer_name(table)
-                    )
+                    fields = _get_datetime_field_names(source, table)
                     if fields:
                         refresh_tables.append(table)
                         logger.info(
@@ -98,7 +96,7 @@ def migrate_existing_services(dry_run: bool = False) -> None:
                 )
                 failures.append(item_id)
     finally:
-        source.Close()
+        source.close()
 
     if failures:
         raise RuntimeError(

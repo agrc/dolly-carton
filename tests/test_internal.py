@@ -390,7 +390,9 @@ class TestCreateFgdb:
         ):
             create_fgdb(tables, agol_lookup)
 
-    def test_copy_projects_with_esri_transform_and_converts_dates(self, monkeypatch):
+    def test_copy_projects_with_esri_transform_and_converts_dates(
+        self, monkeypatch, tmp_path
+    ):
         arcpy = _mock_arcpy(monkeypatch)
         arcpy.Exists.return_value = False
         date_field = Mock()
@@ -405,48 +407,52 @@ class TestCreateFgdb:
             "dolly.internal.get_service_from_title", Mock(return_value="test_layer")
         )
 
+        internal = tmp_path / "internal.sde"
+        output_path = tmp_path / "output.gdb"
         result = _copy_table_to_fgdb(
-            Path("/test/internal.sde"),
+            internal,
             "sgid.test.table1",
-            Path("/test/output.gdb"),
+            output_path,
             {"geometry_type": "POLYGON", "published_name": "Test Table"},
         )
 
         assert result is True
         arcpy.management.CreateFileGDB.assert_called_once_with(
-            out_folder_path="/test", out_name="output.gdb"
+            out_folder_path=str(tmp_path), out_name="output.gdb"
         )
         project_call = arcpy.management.Project.call_args
         assert project_call.args == (
-            "/test/internal.sde/sgid.test.table1",
-            "/test/output.gdb/test_layer",
+            str(internal / "sgid.test.table1"),
+            str(output_path / "test_layer"),
         )
         assert (
             project_call.kwargs["out_coor_system"]
             == arcpy.SpatialReference.return_value
         )
         assert project_call.kwargs["transform_method"] == "NAD_1983_To_WGS_1984_5"
-        convert_dates.assert_called_once_with(
-            Path("/test/output.gdb"), "test_layer", {"updated"}
-        )
+        convert_dates.assert_called_once_with(output_path, "test_layer", {"updated"})
 
-    def test_copy_uses_table_to_table_for_standalone_tables(self, monkeypatch):
+    def test_copy_uses_table_to_table_for_standalone_tables(
+        self, monkeypatch, tmp_path
+    ):
         arcpy = _mock_arcpy(monkeypatch)
         monkeypatch.setattr(
             "dolly.internal.get_service_from_title", Mock(return_value="test_table")
         )
 
+        internal = tmp_path / "internal.sde"
+        output_path = tmp_path / "output.gdb"
         result = _copy_table_to_fgdb(
-            Path("/test/internal.sde"),
+            internal,
             "sgid.test.table1",
-            Path("/test/output.gdb"),
+            output_path,
             {"geometry_type": "STAND ALONE", "published_name": "Test Table"},
         )
 
         assert result is True
         arcpy.conversion.TableToTable.assert_called_once_with(
-            "/test/internal.sde/sgid.test.table1",
-            "/test/output.gdb",
+            str(internal / "sgid.test.table1"),
+            str(output_path),
             "test_table",
         )
         arcpy.management.Project.assert_not_called()
@@ -522,17 +528,61 @@ class TestCopyTableToFgdb:
     """Test cases for the _copy_table_to_fgdb function."""
 
     def test_source_field_detection_excludes_date_only_and_time_only(self):
-        from osgeo import ogr
-
         from dolly.internal import _get_datetime_field_names
 
-        dataset = ogr.GetDriverByName("Memory").CreateDataSource("")
-        layer = dataset.CreateLayer("source", geom_type=ogr.wkbNone)
-        layer.CreateField(ogr.FieldDefn("timestamp", ogr.OFTDateTime))
-        layer.CreateField(ogr.FieldDefn("calendar_date", ogr.OFTDate))
-        layer.CreateField(ogr.FieldDefn("clock_time", ogr.OFTTime))
+        connection = Mock()
+        cursor = connection.cursor.return_value
+        cursor.fetchall.return_value = [
+            ("created", "datetime"),
+            ("updated", "datetime2"),
+            ("legacy", "smalldatetime"),
+            ("offset", "datetimeoffset"),
+            ("calendar_date", "date"),
+            ("clock_time", "time"),
+            ("version", "timestamp"),
+            ("row_version", "rowversion"),
+            ("label", "nvarchar"),
+        ]
 
-        assert _get_datetime_field_names(dataset, "source") == {"timestamp"}
+        assert _get_datetime_field_names(connection, "sgid.society.source_table") == {
+            "created",
+            "updated",
+            "legacy",
+            "offset",
+        }
+        query, *parameters = cursor.execute.call_args.args
+        assert "TABLE_CATALOG = ? AND TABLE_SCHEMA = ? AND TABLE_NAME = ?" in query
+        assert parameters == ["sgid", "society", "source_table"]
+        cursor.close.assert_called_once()
+        connection.close.assert_not_called()
+
+    @pytest.mark.parametrize("table", ["source", "society.source", "sgid..source"])
+    def test_source_field_detection_rejects_unqualified_tables(self, table):
+        from dolly.internal import _get_datetime_field_names
+
+        connection = Mock()
+        with pytest.raises(ValueError, match="sgid.schema.table"):
+            _get_datetime_field_names(connection, table)
+        connection.cursor.assert_not_called()
+
+    def test_source_field_detection_reports_missing_or_inaccessible_table(self):
+        from dolly.internal import _get_datetime_field_names
+
+        connection = Mock()
+        connection.cursor.return_value.fetchall.return_value = []
+        with pytest.raises(LookupError, match="No visible columns"):
+            _get_datetime_field_names(connection, "sgid.society.missing")
+        connection.cursor.return_value.close.assert_called_once()
+
+    def test_source_field_detection_closes_cursor_on_query_failure(self):
+        from dolly.internal import _get_datetime_field_names
+
+        connection = Mock()
+        cursor = connection.cursor.return_value
+        cursor.execute.side_effect = RuntimeError("Cannot read schema")
+        with pytest.raises(RuntimeError, match="Cannot read schema"):
+            _get_datetime_field_names(connection, "sgid.society.source")
+        cursor.close.assert_called_once()
 
     def test_converts_local_timestamps_and_preserves_date_fields(self, tmp_path):
         from osgeo import gdal, ogr
