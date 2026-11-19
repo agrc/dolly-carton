@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.0.11](https://github.com/agrc/dolly-carton/compare/v1.0.10...v1.0.11) (2026-11-19)
+
+
+### Bug Fixes
+
+* clear arcpy locks in temp directory ([1a2ac17](https://github.com/agrc/dolly-carton/commit/1a2ac17bf7395ed7f033f35ce9c1888b9bc9b8a2))
+* correct migration organization validation ([16d4313](https://github.com/agrc/dolly-carton/commit/16d4313237b119903491ce35ceb9dd106e361d03))
+* dynamically determine output path ([911de3b](https://github.com/agrc/dolly-carton/commit/911de3bf3bbf86a03fe812cac291e87a8a543e89))
+* fix timezone migration on windows machines ([4e983dd](https://github.com/agrc/dolly-carton/commit/4e983dd0e0c5fc7301af5df20b50dbe7fc2f685c))
+* repair missing hosted layer extents ([26042de](https://github.com/agrc/dolly-carton/commit/26042de4987b578f47b7b76cb3c342533ff672e2)), refs [#62](https://github.com/agrc/dolly-carton/issues/62)
+* resolve output from working directory ([cdc1318](https://github.com/agrc/dolly-carton/commit/cdc1318f2988fb8d8c34a4b7feb927df0f228c05))
+
 ## [1.0.10](https://github.com/agrc/dolly-carton/compare/v1.0.9...v1.0.10) (2026-11-16)
 
 
