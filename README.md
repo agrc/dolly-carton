@@ -67,6 +67,10 @@ Create `src/dolly/secrets/secrets.dev.json` based on `src/dolly/secrets/secrets_
 
 ## Usage
 
+Dolly writes temporary files to the `output` directory in its working directory
+and clears its contents at the start of each run. Run it from a writable
+directory where that cleanup is safe; Docker uses `/app/output`.
+
 ```bash
 # Process all changed tables
 dolly

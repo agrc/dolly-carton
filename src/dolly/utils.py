@@ -19,7 +19,7 @@ RETRY_DELAY_TIME = 2
 #: AGOL leaves a job in a pending state indefinitely.
 AGOL_CALL_TIMEOUT = 20 * 60
 
-OUTPUT_PATH = Path(__file__).resolve().parents[2] / "output"
+OUTPUT_PATH = Path.cwd() / "output"
 FGDB_PATH = OUTPUT_PATH / "upload.gdb"
 APP_ENVIRONMENT = os.environ["APP_ENVIRONMENT"]
 

@@ -68,6 +68,7 @@ def _get_internal_connection() -> Path:
     """
     import arcpy
 
+    OUTPUT_PATH.mkdir(parents=True, exist_ok=True)
     sde_path = OUTPUT_PATH / "internal.sde"
     if not sde_path.exists():
         arcpy.management.CreateDatabaseConnection(

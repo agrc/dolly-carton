@@ -1,10 +1,12 @@
 """Tests for utility functions in dolly.utils module."""
 
+import runpy
 from unittest.mock import patch
 from uuid import uuid4
 
 import pytest
 
+import dolly.utils
 from dolly.utils import (
     call_with_timeout,
     get_gdal_layer_name,
@@ -13,6 +15,15 @@ from dolly.utils import (
     is_guid,
     retry,
 )
+
+
+def test_output_paths_use_working_directory(monkeypatch, tmp_path):
+    monkeypatch.chdir(tmp_path)
+
+    utils = runpy.run_path(dolly.utils.__file__)
+
+    assert utils["OUTPUT_PATH"] == tmp_path / "output"
+    assert utils["FGDB_PATH"] == tmp_path / "output" / "upload.gdb"
 
 
 class TestIsGuid:

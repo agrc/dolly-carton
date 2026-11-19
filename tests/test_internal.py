@@ -13,6 +13,7 @@ from dolly.internal import (
     _copy_table_to_fgdb,
     _generate_output_path,
     _get_geometry_option,
+    _get_internal_connection,
     _prepare_gdal_options,
     create_fgdb,
     determine_updated_tables,
@@ -28,6 +29,18 @@ def _mock_arcpy(monkeypatch):
     arcpy.ListFields.return_value = []
     monkeypatch.setitem(sys.modules, "arcpy", arcpy)
     return arcpy
+
+
+def test_internal_connection_creates_output_directory(monkeypatch, tmp_path):
+    arcpy = _mock_arcpy(monkeypatch)
+    output_path = tmp_path / "output"
+    monkeypatch.setattr("dolly.internal.OUTPUT_PATH", output_path)
+
+    assert _get_internal_connection() == output_path / "internal.sde"
+    assert output_path.is_dir()
+    assert arcpy.management.CreateDatabaseConnection.call_args.kwargs[
+        "out_folder_path"
+    ] == str(output_path)
 
 
 class TestGenerateOutputPath:
